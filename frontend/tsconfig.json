@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "es2017",
+    "module": "none",
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "ignoreDeprecations": "6.0",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./static/js",
+    "rootDir": "./static/ts",
+    "lib": ["es2017", "dom"]
+  },
+  "include": [
+    "./static/ts/**/*.ts"
+  ]
+}
+
+
+
+

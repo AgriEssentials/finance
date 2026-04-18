@@ -1,0 +1,364 @@
+:root {
+  --primary: #2962FF !important;
+  --primary-dark: #1E53E5 !important;
+  --secondary: #E91E63 !important;
+  --accent: #FF9800 !important;
+  
+  --success: #26A69A !important;
+  --danger: #EF5350 !important;
+  --warning: #FFA726 !important;
+  --info: #2962FF !important;
+
+  --bg-primary: #0B0E14 !important;
+  --bg-secondary: #131722 !important;
+  --bg-tertiary: #1E222D !important;
+  --bg-card: #131722 !important;
+  --bg-hover: #2A2E39 !important;
+
+  --text-primary: #D1D4DC !important;
+  --text-secondary: #787B86 !important;
+  --text-muted: #434651 !important;
+  --text-inverse: #FFFFFF !important;
+  
+  --border-color: #2A2E39 !important;
+  
+  --radius-sm: 2px !important;
+  --radius: 4px !important;
+  --radius-lg: 6px !important;
+  
+  --font-sans: 'Inter', -apple-system, sans-serif !important;
+  --font-mono: 'Fira Code', 'Courier New', monospace !important;
+  
+  --shadow-sm: none !important;
+  --shadow: none !important;
+  --shadow-lg: none !important;
+  --shadow-glow: none !important;
+  
+  --transition: all 0.1s ease !important;
+}
+
+body {
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+  font-family: var(--font-sans) !important;
+  letter-spacing: 0.02em;
+}
+
+body::before {
+  display: none !important;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-inverse) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.container {
+  max-width: 1600px !important;
+  margin: 0 auto !important;
+  width: 100% !important;
+  padding: 10px 20px !important;
+}
+
+.header {
+  border-bottom: 1px solid var(--border-color) !important;
+  padding: 10px 0 !important;
+  margin-bottom: 20px !important;
+}
+
+.logo-icon {
+  border-radius: 0 !important;
+  background: var(--bg-tertiary) !important;
+  border: 1px solid var(--info) !important;
+  color: var(--info) !important;
+  box-shadow: none !important;
+  text-shadow: 0 0 5px var(--info);
+}
+
+.logo-text h1 {
+  background: none !important;
+  color: var(--text-inverse) !important;
+  -webkit-text-fill-color: var(--text-inverse) !important;
+  font-size: 1.4rem !important;
+  font-family: var(--font-mono) !important;
+}
+
+.logo-text p {
+  font-family: var(--font-mono) !important;
+  font-size: 0.75rem !important;
+  text-transform: uppercase;
+  color: var(--info) !important;
+}
+
+.nav-chip {
+  border-radius: 2px !important;
+  font-family: var(--font-mono) !important;
+  text-transform: uppercase;
+  border-color: var(--border-color) !important;
+  background-color: transparent !important;
+}
+
+.nav-chip:hover {
+  background-color: var(--bg-hover) !important;
+  border-color: var(--text-secondary) !important;
+}
+
+.disclaimer-banner {
+  border-radius: 2px !important;
+  background: rgba(38, 166, 154, 0.1) !important;
+  border: 1px solid var(--success) !important;
+  color: var(--success) !important;
+  font-family: var(--font-mono) !important;
+}
+.status-dot { color: var(--success) !important; text-shadow: 0 0 8px var(--success); }
+
+.market-ticker {
+  gap: 2px !important;
+  background: var(--bg-tertiary) !important;
+  padding: 2px;
+  border: 1px solid var(--border-color) !important;
+}
+
+.ticker-item {
+  border-radius: 0 !important;
+  border: none !important;
+  border-right: 1px solid var(--border-color) !important;
+  background: var(--bg-secondary) !important;
+  font-family: var(--font-mono) !important;
+  text-transform: uppercase;
+}
+.ticker-item:last-child { border-right: none !important; }
+
+.ticker-item span { color: var(--text-secondary) !important; font-size: 0.75rem !important; font-family: var(--font-mono) !important;}
+.ticker-item strong { font-size: 0.85rem !important; text-shadow: 0 0 5px currentColor; font-family: var(--font-mono) !important;}
+
+.analysis-card, .metric-card, .price-card, .hero-panel, .input-card, .professional-banner {
+  border-radius: 4px !important;
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: none !important;
+}
+
+.analysis-card h3 {
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 10px;
+  margin-bottom: 16px;
+  font-family: var(--font-mono);
+  font-size: 1rem;
+}
+.analysis-card h3::before {
+  display: none !important;
+}
+
+.metric-value, .score-value, .component-value, .sizing-value, .price, .detail-value, strong {
+  font-family: var(--font-mono) !important;
+}
+
+.metric-value.positive, .score-value.positive, .price.positive, .detail-value.positive, .ticker-item.positive strong, .hero-panel.positive strong {
+  color: var(--success) !important;
+  text-shadow: 0 0 5px rgba(38,166,154,0.4);
+}
+.metric-value.negative, .score-value.negative, .price.negative, .detail-value.negative, .ticker-item.negative strong, .hero-panel.negative strong {
+  color: var(--danger) !important;
+  text-shadow: 0 0 5px rgba(239,83,80,0.4);
+}
+.metric-value.neutral, .score-value.neutral, .price.neutral, .detail-value.neutral, .ticker-item.neutral strong, .hero-panel.neutral strong {
+  color: var(--info) !important;
+  text-shadow: 0 0 5px rgba(41,98,255,0.4);
+}
+
+.price {
+  background: none !important;
+  -webkit-text-fill-color: var(--text-inverse) !important;
+  color: var(--text-inverse) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 2.5rem !important;
+}
+
+.details-grid {
+  gap: 4px !important;
+}
+
+.detail-item {
+  background: var(--bg-secondary) !important;
+  padding: 8px 12px !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.detail-label {
+  font-size: 0.75rem !important;
+  text-transform: uppercase;
+  font-family: var(--font-mono) !important;
+}
+
+.detail-value {
+  font-size: 0.85rem !important;
+}
+
+.btn-primary {
+  background: var(--info) !important;
+  color: #fff !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+  text-transform: uppercase;
+  font-family: var(--font-mono) !important;
+  letter-spacing: 0.05em;
+  border: 1px solid #448AFF !important;
+}
+
+.btn-primary:hover {
+  background: #448AFF !important;
+  transform: none !important;
+}
+
+.btn-secondary, .tab-btn {
+  background: var(--bg-secondary) !important;
+  border-radius: 4px !important;
+  border: 1px solid var(--border-color) !important;
+  font-family: var(--font-mono) !important;
+  text-transform: uppercase;
+  font-size: 0.8rem !important;
+}
+
+.btn-secondary:hover, .tab-btn:hover {
+  background: var(--bg-tertiary) !important;
+  border-color: var(--text-secondary) !important;
+}
+.tab-btn.active {
+  background: var(--border-color) !important;
+  color: var(--info) !important;
+  border-color: var(--info) !important;
+}
+
+input[type="text"], input[type="number"], select {
+  background: var(--bg-primary) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 4px !important;
+  font-family: var(--font-mono) !important;
+  color: var(--text-inverse) !important;
+  padding: 10px 12px !important;
+}
+input:focus, select:focus {
+  border-color: var(--info) !important;
+  box-shadow: 0 0 0 1px var(--info) !important;
+}
+.form-group label {
+  font-family: var(--font-mono) !important;
+  font-size: 0.75rem !important;
+  color: var(--text-secondary) !important;
+}
+
+::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-primary) !important;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color) !important;
+  border-radius: 0 !important;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary) !important;
+}
+
+.hero-grid {
+  padding: 20px !important;
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 4px !important;
+}
+.home-view {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.professional-banner::before {
+  display: none;
+}
+.professional-banner {
+  border-left: 4px solid var(--border-color) !important;
+}
+.professional-banner.strong-buy { border-left-color: var(--success) !important; }
+.professional-banner.buy { border-left-color: #A5D6A7 !important; }
+.professional-banner.moderate-buy { border-left-color: var(--info) !important; }
+.professional-banner.hold { border-left-color: var(--warning) !important; }
+.professional-banner.reduce { border-left-color: #FFB74D !important; }
+.professional-banner.sell { border-left-color: var(--danger) !important; }
+
+body::after {
+  content: " ";
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+  z-index: 999;
+  background-size: 100% 2px, 3px 100%;
+  pointer-events: none;
+}
+
+.mode-btn {
+  background: var(--bg-primary) !important;
+  border-color: var(--border-color) !important;
+  border-radius: 4px !important;
+}
+.mode-btn.active {
+  background: var(--bg-tertiary) !important;
+  border-color: var(--info) !important;
+  color: var(--text-inverse) !important;
+}
+.mode-label {
+  font-family: var(--font-mono) !important;
+  text-transform: uppercase;
+  font-size: 0.9rem !important;
+}
+.mode-desc {
+  font-family: var(--font-mono) !important;
+}
+
+.terminal-kicker, .hero-kicker {
+  font-family: var(--font-mono) !important;
+  color: var(--info) !important;
+  text-transform: uppercase;
+}
+
+/* Data tables styles */
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th, td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+th {
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+td {
+  color: var(--text-primary);
+}
+
+.data-sources-link {
+  font-family: var(--font-mono) !important;
+  text-transform: uppercase;
+  border-radius: 4px !important;
+  background: transparent !important;
+  border-color: var(--info) !important;
+  color: var(--info) !important;
+}
+
+.data-sources-link:hover {
+  background: rgba(41, 98, 255, 0.1) !important;
+  box-shadow: none !important;
+}

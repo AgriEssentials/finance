@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quant Analysis Terminal | AI Stock Analysis</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/pro-theme.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">AI</div>
+                <div class="logo-text">
+                    <h1>AI Quant Terminal</h1>
+                    <p>Professional Market Intelligence</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <div class="user-info" id="user-info">
+                    <span class="user-name" id="user-name">Trader</span>
+                    <button class="logout-btn" id="logout-btn" title="Logout">🚪</button>
+                </div>
+                <a href="/data-sources.html" class="data-sources-link">Data Sources</a>
+            </div>
+        </header>
+
+        <!-- Disclaimer -->
+        <div class="disclaimer-banner">
+            <span>⚠</span>
+            <span><strong>Disclaimer:</strong> This tool is for educational purposes only and does not constitute financial advice. Stock market investments are subject to market risks.</span>
+        </div>
+
+        <!-- Live Market Ticker -->
+        <div class="market-ticker" id="live-ticker-bar">
+            <div class="ticker-item"><span>NIFTY 50</span><strong>--</strong></div>
+            <div class="ticker-item"><span>SENSEX</span><strong>--</strong></div>
+            <div class="ticker-item"><span>BANKNIFTY</span><strong>--</strong></div>
+            <div class="ticker-item"><span>INDIA VIX</span><strong>--</strong></div>
+            <div class="ticker-item"><span>Signal</span><strong>--</strong></div>
+        </div>
+
+        <!-- Analysis Terminal -->
+        <div class="analysis-terminal-header">
+            <div class="terminal-info">
+                <div class="terminal-kicker">Quantitative Analysis Engine</div>
+                <h3>Professional Stock Analysis Terminal</h3>
+                <p class="terminal-subtitle">AI-powered technical, fundamental, sentiment & risk analysis</p>
+            </div>
+            <div class="terminal-chips">
+                <div class="terminal-chip">
+                    <span>System Status</span>
+                    <strong id="system-status">ONLINE</strong>
+                </div>
+                <div class="terminal-chip">
+                    <span>Data Feed</span>
+                    <strong id="data-feed-status">LIVE</strong>
+                </div>
+                <div class="terminal-chip">
+                    <span>AI Engine</span>
+                    <strong id="ai-engine-status">READY</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Input Section -->
+            <div class="input-section">
+                <div class="input-card">
+                    <h2>Analyze Stock</h2>
+
+                    <div class="form-group">
+                        <label for="symbol">Stock Symbol</label>
+                        <div class="symbol-input-wrapper">
+                            <input type="text" id="symbol" class="symbol-input" placeholder="e.g., HDFCBANK.NS" value="RELIANCE.NS">
+                            <button class="popular-symbols-btn" id="popular-symbols-btn" title="Browse popular symbols">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                </svg>
+                            </button>
+                        </div>
+                        <p class="help-text">Format: SYMBOL.NS for NSE, SYMBOL.BO for BSE</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="portfolio-value">Portfolio Value (INR)</label>
+                        <input type="number" id="portfolio-value" class="portfolio-input" value="1000000" min="10000" step="10000">
+                        <p class="help-text">Used for position sizing calculations</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Analysis Mode</label>
+                        <div class="mode-selector">
+                            <button class="mode-btn" data-mode="intraday">Intraday</button>
+                            <button class="mode-btn active" data-mode="swing">Swing</button>
+                            <button class="mode-btn" data-mode="longterm">Long-term</button>
+                        </div>
+                        <p class="help-text mode-help"><span id="mode-description">Daily charts for 6 months - Best for medium-term trading</span></p>
+                    </div>
+
+                    <button class="btn-primary analyze-btn" id="analyze-btn">
+                        <span class="btn-icon">🔍</span>
+                        <span class="btn-text">[ EXECUTE QUANTITATIVE ANALYSIS ]</span>
+                        <span class="btn-loader spinner" style="display: none;"></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <div class="results-section" id="results-section">
+                <div id="empty-state" class="empty-state">
+                    <div class="empty-icon">📊</div>
+                    <h3>Ready to Analyze</h3>
+                    <p>Enter a stock symbol and click "Execute Quantitative Analysis" to get technical, fundamental, sentiment, and AI-driven recommendations.</p>
+                </div>
+
+                <div id="analysis-content" style="display: block;">
+                    <!-- Price Card -->
+                    <div class="price-card">
+                        <div class="stock-info">
+                            <h2 id="result-symbol">-</h2>
+                            <span class="mode-badge" id="result-mode">-</span>
+                        </div>
+                        <div class="price-display">
+                            <span class="currency">INR</span>
+                            <div class="price" id="result-price">-</div>
+                            <div class="timestamp" id="price-timestamp">Last updated: -</div>
+                        </div>
+                    </div>
+
+                    <!-- Professional Recommendation -->
+                    <div id="professional-banner" class="professional-banner">
+                        <div class="recommendation-header">
+                            <div>
+                                <h3 id="recommendation-title" class="recommendation-title">HOLD</h3>
+                                <div id="recommendation-action" class="recommendation-action">Awaiting analysis...</div>
+                            </div>
+                            <div class="recommendation-score">
+                                <div id="composite-score" class="score-value">-</div>
+                                <div class="score-label">Composite Score</div>
+                            </div>
+                        </div>
+                        <div class="component-scores">
+                            <div class="component-item"><span class="component-label">Technical</span><span id="technical-score" class="component-value">-</span></div>
+                            <div class="component-item"><span class="component-label">Fundamental</span><span id="fundamental-score" class="component-value">-</span></div>
+                            <div class="component-item"><span class="component-label">Sentiment</span><span id="sentiment-score" class="component-value">-</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Metrics Grid -->
+                    <div class="metrics-grid">
+                        <div class="metric-card"><div class="metric-label">Trend</div><div id="metric-trend" class="metric-value">-</div></div>
+                        <div class="metric-card"><div class="metric-label">RSI</div><div id="metric-rsi" class="metric-value">-</div></div>
+                        <div class="metric-card"><div class="metric-label">AI Signal</div><div id="metric-ai" class="metric-value">-</div></div>
+                        <div class="metric-card"><div class="metric-label">Risk</div><div id="metric-risk" class="metric-value">-</div></div>
+                    </div>
+
+                    <!-- AI Reasoning -->
+                    <div id="reasoning-card" class="analysis-card" style="display: none;">
+                        <h3>AI Reasoning</h3>
+                        <div id="reasoning-content"></div>
+                    </div>
+
+                    <!-- Position Sizing -->
+                    <div class="analysis-card">
+                        <h3>Position Sizing</h3>
+                        <div class="position-sizing-grid">
+                            <div class="sizing-item"><span class="sizing-label">Recommended Shares</span><span id="recommended-shares" class="sizing-value">-</span></div>
+                            <div class="sizing-item"><span class="sizing-label">Position Value</span><span id="position-value" class="sizing-value">-</span></div>
+                            <div class="sizing-item"><span class="sizing-label">Position %</span><span id="position-percent" class="sizing-value">-</span></div>
+                            <div class="sizing-item"><span class="sizing-label">Risk Amount</span><span id="risk-amount" class="sizing-value">-</span></div>
+                            <div class="sizing-item"><span class="sizing-label">Risk %</span><span id="risk-percent" class="sizing-value">-</span></div>
+                            <div class="sizing-item"><span class="sizing-label">Risk Reward</span><span id="risk-reward" class="sizing-value">-</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Fundamental Analysis -->
+                    <div class="analysis-card">
+                        <h3>Fundamental Analysis</h3>
+                        <div class="fundamental-overview">
+                            <div class="fundamental-score-card">
+                                <div id="financial-health-score" class="score-circle">-</div>
+                                <div id="health-status" class="score-status">N/A</div>
+                            </div>
+                            <div id="fundamental-metrics" class="fundamental-metrics"></div>
+                        </div>
+                    </div>
+
+                    <!-- Advanced Indicators -->
+                    <div class="analysis-card">
+                        <h3>Advanced Indicators</h3>
+                        <div class="advanced-tabs">
+                            <button class="tab-btn active" data-tab="fibonacci">Fibonacci</button>
+                            <button class="tab-btn" data-tab="volume">Volume</button>
+                            <button class="tab-btn" data-tab="pivots">Pivots</button>
+                        </div>
+                        <div id="advanced-indicators-content"></div>
+                    </div>
+
+                    <!-- Technical Details -->
+                    <div class="analysis-card">
+                        <h3>Technical Details</h3>
+                        <div id="technical-details" class="details-grid"></div>
+                    </div>
+
+                    <!-- Risk Details -->
+                    <div class="analysis-card">
+                        <h3>Risk Details</h3>
+                        <div id="risk-details" class="details-grid"></div>
+                    </div>
+
+                    <!-- External API Signal -->
+                    <div id="finnhub-card" class="analysis-card" style="display: none;">
+                        <h3>External API Signal</h3>
+                        <div id="finnhub-insights" class="details-grid"></div>
+                    </div>
+
+                    <!-- Live News Analysis -->
+                    <div class="analysis-card">
+                        <h3>Live News Analysis</h3>
+                        <div id="news-sources"></div>
+                        <div id="sentiment-details" class="sentiment-breakdown"></div>
+                        <div id="news-articles"></div>
+                    </div>
+
+                    <!-- Institutional Dashboard -->
+                    <div id="institutional-dashboard" class="analysis-card">
+                        <h3>Institutional Dashboard</h3>
+                        <div id="kpi-metrics"></div>
+                        <div id="dashboard-charts"></div>
+                    </div>
+
+                    <!-- AI Prediction Chart -->
+                    <div class="analysis-card">
+                        <h3>AI Prediction Chart</h3>
+                        <div class="chart-description">Historical vs AI forecasted prices.</div>
+                        <div class="chart-container"><canvas id="prediction-chart"></canvas></div>
+                        <div id="ai-prediction-guide" class="ai-guide-box"></div>
+                        <div id="ai-transparency-details" class="ai-transparency-box"></div>
+                    </div>
+
+                    <!-- Advanced AI Features -->
+                    <div class="analysis-card">
+                        <h3>Advanced AI Features</h3>
+                        <div class="hero-actions" style="margin-top: 0;">
+                            <button id="lstm-train-btn" class="btn-secondary">Run LSTM Forecast</button>
+                            <button id="transformer-train-btn" class="btn-secondary">Run Transformer Forecast</button>
+                            <button id="portfolio-optimize-btn" class="btn-secondary">Optimize Now</button>
+                            <button id="explain-btn" class="btn-secondary">Get Explanation</button>
+                        </div>
+                        <div id="lstm-forecast" style="margin-top: 12px;"></div>
+                        <div id="transformer-forecast" style="margin-top: 12px;"></div>
+                        <div id="portfolio-optimization" style="margin-top: 12px;"></div>
+                        <div id="explainability" style="margin-top: 12px;"></div>
+                    </div>
+
+                    <!-- Backtesting Engine -->
+                    <div class="analysis-card">
+                        <h3>Backtesting Engine</h3>
+                        <div class="hero-actions" style="margin-top: 0;">
+                            <button id="backtest-rsi-btn" class="btn-secondary">Backtest RSI</button>
+                            <button id="backtest-macd-btn" class="btn-secondary">Backtest MACD</button>
+                        </div>
+                        <div id="backtest-results" style="margin-top: 12px;"></div>
+                    </div>
+
+                    <!-- Real-time Alerts -->
+                    <div class="analysis-card">
+                        <h3>Real-time Alerts</h3>
+                        <div class="details-grid">
+                            <input type="text" id="alert-symbol" placeholder="RELIANCE.NS">
+                            <select id="alert-type">
+                                <option value="price">Price Threshold</option>
+                                <option value="sentiment">Sentiment Change</option>
+                            </select>
+                            <input type="number" id="alert-threshold" placeholder="Enter threshold">
+                        </div>
+                        <div class="hero-actions" style="margin-top: 12px;">
+                            <button id="create-alert-btn" class="btn-secondary">Create Alert</button>
+                        </div>
+                        <div id="alerts-list" style="margin-top: 12px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Symbols Modal -->
+    <div id="symbols-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Popular Symbols</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-tabs">
+                <button class="tab-btn active" data-tab="nse">NSE</button>
+                <button class="tab-btn" data-tab="bse">BSE</button>
+            </div>
+            <div class="symbols-list" id="symbols-list"></div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="/static/js/analysis.js"></script>
+</body>
+</html>
