@@ -17,6 +17,34 @@ import os
 
 from app.database import get_db, User
 
+# Supabase Auth Integration
+try:
+    from supabase import create_client, Client
+    HAS_SUPABASE = True
+except ImportError:
+    HAS_SUPABASE = False
+    Client = None
+
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
+SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
+
+supabase_auth: Optional[Client] = None
+if HAS_SUPABASE and SUPABASE_URL and SUPABASE_KEY:
+    try:
+        # Validate URL format
+        if not SUPABASE_URL.startswith("https://"):
+            print(f"[AUTH WARNING] Invalid SUPABASE_URL format. Must start with https://")
+        else:
+            supabase_auth = create_client(SUPABASE_URL, SUPABASE_KEY)
+            print(f"[AUTH] Supabase Authentication Engine Initialized: {SUPABASE_URL[:30]}...")
+    except Exception as e:
+        print(f"[AUTH WARNING] Supabase connection failed: {e}")
+else:
+    if not HAS_SUPABASE:
+        print("[AUTH] Supabase package not installed. Using local authentication only.")
+    elif not SUPABASE_URL or not SUPABASE_KEY:
+        print("[AUTH] Supabase credentials not configured. Using local authentication only.")
+
 # Configuration
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
@@ -146,48 +174,131 @@ def get_user_by_api_key(db: Session, api_key: str) -> Optional[User]:
     return None
 
 def create_user(db: Session, user_data: UserCreate) -> User:
-    """Create a new user"""
-    # Check if email or username already exists
+    """Create a new user using Supabase Auth and local mirror (STRICT MODE)"""
+    # Check if email or username already exists locally
     if get_user_by_email(db, user_data.email):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
         )
-    
+
     if get_user_by_username(db, user_data.username):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username already taken"
         )
-    
-    # Create user
+
+    # STRICT MODE: Supabase is REQUIRED for registration
+    if not supabase_auth:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service unavailable. Please try again later."
+        )
+
+    # 1. Create user in Supabase Auth (REQUIRED - no fallback)
+    try:
+        res = supabase_auth.auth.sign_up({
+            "email": user_data.email,
+            "password": user_data.password,
+            "options": {
+                "data": {
+                    "full_name": user_data.full_name or "",
+                    "username": user_data.username
+                }
+            }
+        })
+        if not res.user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Supabase Auth rejected signup"
+            )
+        print(f"[AUTH] Supabase user created: {res.user.id}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[AUTH ERROR] Supabase signup failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Registration failed: {str(e)}"
+        )
+
+    # 2. Create local mirror ONLY after Supabase succeeds
     hashed_password = get_password_hash(user_data.password)
     db_user = User(
         email=user_data.email,
         username=user_data.username,
         hashed_password=hashed_password,
-        full_name=user_data.full_name
+        full_name=user_data.full_name,
+        is_verified=True  # Mark as verified since Supabase accepted
     )
-    
+
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    
+
     return db_user
 
 def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
-    """Authenticate user by username/email and password"""
-    # Try username first, then email
+    """Authenticate user prioritizing Supabase Auth, falling back to local credentials"""
+
+    is_email = '@' in username
+
+    # Try Supabase Auth First (if email-based login)
+    if supabase_auth and is_email:
+        try:
+            res = supabase_auth.auth.sign_in_with_password({
+                "email": username,
+                "password": password
+            })
+            if res.user:
+                # Successfully authenticated with Supabase. Ensure local mirror exists.
+                user = get_user_by_email(db, username)
+                if not user:
+                    user_name_derived = username.split('@')[0]
+                    # Create mirror dynamically
+                    user = User(
+                        email=username,
+                        username=user_name_derived,
+                        hashed_password=get_password_hash(password),
+                        full_name=user_name_derived,
+                        is_verified=True
+                    )
+                    db.add(user)
+                    db.commit()
+                    db.refresh(user)
+                else:
+                    # Update last login
+                    user.last_login = datetime.utcnow()
+                    db.commit()
+                return user
+        except Exception as e:
+            error_msg = str(e)
+            # Check if this is an email confirmation error
+            if "Email not confirmed" in error_msg or "email_not_confirmed" in error_msg:
+                print(f"[AUTH] Supabase: Email not confirmed for {username}, falling back to local auth")
+                # Fall through to local auth
+            elif "Invalid login credentials" in error_msg or "invalid_credentials" in error_msg:
+                print(f"[AUTH] Supabase: Invalid credentials for {username}")
+                # Fall through to local auth to check local credentials
+            else:
+                print(f"[AUTH WARNING] Supabase auth error: {e}, falling back to local auth")
+                # Fall through to local auth
+
+    # Try local authentication (username or email)
     user = get_user_by_username(db, username)
     if not user:
         user = get_user_by_email(db, username)
-    
+
     if not user:
         return None
-    
+
     if not verify_password(password, user.hashed_password):
         return None
-    
+
+    # Update last login on successful local auth
+    user.last_login = datetime.utcnow()
+    db.commit()
+
     return user
 
 def generate_user_api_key(db: Session, user_id: int) -> str:
@@ -342,7 +453,7 @@ def log_audit_event(
 def login_user(db: Session, username: str, password: str, request: Optional[Request] = None) -> Token:
     """Authenticate user and generate tokens"""
     user = authenticate_user(db, username, password)
-    
+
     if not user:
         # Log failed login attempt
         log_audit_event(
@@ -359,11 +470,13 @@ def login_user(db: Session, username: str, password: str, request: Optional[Requ
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    # Update last login
-    user.last_login = datetime.utcnow()
-    db.commit()
-    
+
+    # Note: last_login is already updated in authenticate_user for local auth
+    # For Supabase auth, we update it there too. But ensure it's set here as well for safety.
+    if not user.last_login:
+        user.last_login = datetime.utcnow()
+        db.commit()
+
     # Generate tokens
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
@@ -373,7 +486,7 @@ def login_user(db: Session, username: str, password: str, request: Optional[Requ
     refresh_token = create_refresh_token(
         data={"sub": user.email, "user_id": user.id}
     )
-    
+
     # Log successful login
     log_audit_event(
         db=db,
@@ -384,7 +497,7 @@ def login_user(db: Session, username: str, password: str, request: Optional[Requ
         request=request,
         success=True
     )
-    
+
     return Token(
         access_token=access_token,
         refresh_token=refresh_token,

@@ -68,31 +68,26 @@ let landingMainChart = null;
 let landingSparklineCharts = [];
 let landingRefreshInterval = null;
 
-// DOM Elements - Lazy initialization (name scoped to avoid collision with auth.js)
-let analysisElementsCache = null;
-
+// DOM Elements - Always get fresh references (never cache to avoid stale elements after auth redirect)
 function getAnalysisElements() {
-    if (!analysisElementsCache) {
-        analysisElementsCache = {
-            symbolInput: document.getElementById('symbol'),
-            portfolioInput: document.getElementById('portfolio-value'),
-            analyzeBtn: document.getElementById('analyze-btn'),
-            popularSymbolsBtn: document.getElementById('popular-symbols-btn'),
-            modeBtns: document.querySelectorAll('.mode-btn'),
-            resultsSection: document.getElementById('results-section'),
-            emptyState: document.getElementById('empty-state'),
-            symbolsModal: document.getElementById('symbols-modal'),
-            symbolsList: document.getElementById('symbols-list'),
-            modalClose: document.querySelector('.modal-close'),
-            tabBtns: document.querySelectorAll('.modal-tabs .tab-btn'),
-            logoutBtn: document.getElementById('logout-btn')
-        };
-    }
-    return analysisElementsCache;
+    return {
+        symbolInput: document.getElementById('symbol'),
+        portfolioInput: document.getElementById('portfolio-value'),
+        analyzeBtn: document.getElementById('analyze-btn'),
+        popularSymbolsBtn: document.getElementById('popular-symbols-btn'),
+        modeBtns: document.querySelectorAll('.mode-btn'),
+        resultsSection: document.getElementById('results-section'),
+        emptyState: document.getElementById('empty-state'),
+        symbolsModal: document.getElementById('symbols-modal'),
+        symbolsList: document.getElementById('symbols-list'),
+        modalClose: document.querySelector('.modal-close'),
+        tabBtns: document.querySelectorAll('.modal-tabs .tab-btn'),
+        logoutBtn: document.getElementById('logout-btn')
+    };
 }
 
-const analysisElements = getAnalysisElements();
-const elements = analysisElements;
+// Get fresh elements every time - don't cache
+const elements = getAnalysisElements();
 /**
  * Logout user and redirect to landing page
  */
@@ -522,11 +517,16 @@ async function loadLandingDashboard() {
 }
 // Initialize
 async function init() {
+    console.log('[ANALYSIS] init() starting...');
     initializePage();
+    // Setup ALL event listeners including the analyze button
     setupEventListeners();
+    setupPageEventListeners(); // Additional listeners for page-specific events
+    setupAIFeatures(); // Setup AI feature buttons (LSTM, Transformer, etc.)
     await loadPopularSymbols();
     setupAdvancedTabs();
     loadAlerts();
+    console.log('[ANALYSIS] init() complete - all buttons should be functional');
 }
 // Toast notification
 function showToast(message, type = 'error') {
@@ -550,54 +550,63 @@ function normalizeSymbol(rawSymbol) {
         return symbol;
     return `${symbol}.NS`;
 }
-// Event Listeners
+// Event Listeners - always get fresh elements to avoid stale references after auth redirect
 function setupEventListeners() {
+    const els = getAnalysisElements();
+    console.log('[ANALYSIS] Setting up event listeners...');
+
     // Logout button
-    if (elements.logoutBtn) {
-        elements.logoutBtn.addEventListener('click', handleLogout);
+    if (els.logoutBtn) {
+        els.logoutBtn.addEventListener('click', handleLogout);
+        console.log('[ANALYSIS] Logout button connected');
     }
 
     // Mode selection
-    if (elements.modeBtns && elements.modeBtns.length) {
-        elements.modeBtns.forEach(btn => {
+    if (els.modeBtns && els.modeBtns.length) {
+        els.modeBtns.forEach(btn => {
             btn.addEventListener('click', () => {
-                elements.modeBtns.forEach(b => b.classList.remove('active'));
+                els.modeBtns.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 currentMode = btn.dataset.mode === 'long_term' ? 'longterm' : btn.dataset.mode;
             });
         });
+        console.log('[ANALYSIS] Mode buttons connected');
     }
 
-    // Analyze button
-    if (elements.analyzeBtn) {
-        elements.analyzeBtn.addEventListener('click', handleAnalyze);
+    // Analyze button - CRITICAL: this must be connected for analysis to work
+    if (els.analyzeBtn) {
+        els.analyzeBtn.addEventListener('click', handleAnalyze);
+        console.log('[ANALYSIS] Analyze button connected - CLICK WILL WORK');
+    } else {
+        console.error('[ANALYSIS] CRITICAL: Analyze button not found!');
     }
 
     // Popular symbols
-    if (elements.popularSymbolsBtn && elements.symbolsModal) {
-        elements.popularSymbolsBtn.addEventListener('click', () => {
-            elements.symbolsModal.style.display = 'flex';
+    if (els.popularSymbolsBtn && els.symbolsModal) {
+        els.popularSymbolsBtn.addEventListener('click', () => {
+            els.symbolsModal.style.display = 'flex';
             renderSymbols('nse');
         });
+        console.log('[ANALYSIS] Popular symbols button connected');
     }
-    if (elements.modalClose && elements.symbolsModal) {
-        elements.modalClose.addEventListener('click', () => {
-            elements.symbolsModal.style.display = 'none';
+    if (els.modalClose && els.symbolsModal) {
+        els.modalClose.addEventListener('click', () => {
+            els.symbolsModal.style.display = 'none';
         });
     }
-    if (elements.symbolsModal) {
-        elements.symbolsModal.addEventListener('click', (e) => {
-            if (e.target === elements.symbolsModal) {
-                elements.symbolsModal.style.display = 'none';
+    if (els.symbolsModal) {
+        els.symbolsModal.addEventListener('click', (e) => {
+            if (e.target === els.symbolsModal) {
+                els.symbolsModal.style.display = 'none';
             }
         });
     }
 
     // Tab buttons for modal
-    if (elements.tabBtns && elements.tabBtns.length) {
-        elements.tabBtns.forEach(btn => {
+    if (els.tabBtns && els.tabBtns.length) {
+        els.tabBtns.forEach(btn => {
             btn.addEventListener('click', () => {
-                elements.tabBtns.forEach(b => b.classList.remove('active'));
+                els.tabBtns.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 renderSymbols(btn.dataset.tab);
             });
@@ -605,12 +614,13 @@ function setupEventListeners() {
     }
 
     // Enter key on input
-    if (elements.symbolInput) {
-        elements.symbolInput.addEventListener('keypress', (e) => {
+    if (els.symbolInput) {
+        els.symbolInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 handleAnalyze();
             }
         });
+        console.log('[ANALYSIS] Symbol input connected (Enter key)');
     }
 }
 // Setup advanced tabs
@@ -654,8 +664,10 @@ function renderSymbols(exchange) {
 }
 // Handle analyze
 async function handleAnalyze() {
-    const symbol = elements.symbolInput.value.trim().toUpperCase();
-    const portfolioValue = parseFloat(elements.portfolioInput.value) || 1000000;
+    // Always get fresh elements
+    const els = getAnalysisElements();
+    const symbol = els.symbolInput ? els.symbolInput.value.trim().toUpperCase() : '';
+    const portfolioValue = parseFloat(els.portfolioInput ? els.portfolioInput.value : 1000000) || 1000000;
     if (!symbol) {
         showToast('Please enter a stock symbol', 'error');
         return;
@@ -827,14 +839,18 @@ const bootMessages = [
 ];
 
 function setLoading(loading) {
-    const btnText = elements.analyzeBtn.querySelector('.btn-text');
-    const btnLoader = elements.analyzeBtn.querySelector('.btn-loader');
+    // Always get fresh elements
+    const els = getAnalysisElements();
+    if (!els.analyzeBtn) return;
+
+    const btnText = els.analyzeBtn.querySelector('.btn-text');
+    const btnLoader = els.analyzeBtn.querySelector('.btn-loader');
     
     if (loading) {
-        elements.analyzeBtn.disabled = true;
-        elements.analyzeBtn.style.background = 'rgba(239,83,80,0.2)';
-        elements.analyzeBtn.style.borderColor = 'var(--danger)';
-        elements.analyzeBtn.style.boxShadow = '0 0 20px rgba(239,83,80,0.4)';
+        els.analyzeBtn.disabled = true;
+        els.analyzeBtn.style.background = 'rgba(239,83,80,0.2)';
+        els.analyzeBtn.style.borderColor = 'var(--danger)';
+        els.analyzeBtn.style.boxShadow = '0 0 20px rgba(239,83,80,0.4)';
         
         if (btnLoader)
             btnLoader.style.display = 'inline';
@@ -850,8 +866,8 @@ function setLoading(loading) {
 
             // Random glitch effect on button
             if (Math.random() > 0.7) {
-                elements.analyzeBtn.style.transform = 'translate(' + (Math.random()*4-2) + 'px, ' + (Math.random()*4-2) + 'px)';
-                setTimeout(() => elements.analyzeBtn.style.transform = 'none', 50);
+                els.analyzeBtn.style.transform = 'translate(' + (Math.random()*4-2) + 'px, ' + (Math.random()*4-2) + 'px)';
+                setTimeout(() => els.analyzeBtn.style.transform = 'none', 50);
             }
         }, 300);
         
@@ -863,23 +879,25 @@ function setLoading(loading) {
 
     } else {
         clearInterval(bootSequenceInterval);
-        elements.analyzeBtn.disabled = false;
-        elements.analyzeBtn.style.background = 'rgba(41,98,255,0.2)';
-        elements.analyzeBtn.style.borderColor = 'var(--info)';
-        elements.analyzeBtn.style.boxShadow = '0 0 15px rgba(41,98,255,0.4)';
+        els.analyzeBtn.disabled = false;
+        els.analyzeBtn.style.background = 'rgba(41,98,255,0.2)';
+        els.analyzeBtn.style.borderColor = 'var(--info)';
+        els.analyzeBtn.style.boxShadow = '0 0 15px rgba(41,98,255,0.4)';
         if (btnText)
             btnText.textContent = '[ EXECUTE QUANTITATIVE ANALYSIS ]';
         if (btnLoader)
             btnLoader.style.display = 'none';
 
         // Dramatic reveal of results
-        elements.resultsSection.style.opacity = '0';
-        elements.resultsSection.style.transform = 'translateY(50px)';
-        setTimeout(() => {
-            elements.resultsSection.style.transition = 'all 0.5s cubic-bezier(0.1, 1, 0.1, 1)';
-            elements.resultsSection.style.opacity = '1';
-            elements.resultsSection.style.transform = 'translateY(0)';
-        }, 100);
+        if (els.resultsSection) {
+            els.resultsSection.style.opacity = '0';
+            els.resultsSection.style.transform = 'translateY(50px)';
+            setTimeout(() => {
+                els.resultsSection.style.transition = 'all 0.5s cubic-bezier(0.1, 1, 0.1, 1)';
+                els.resultsSection.style.opacity = '1';
+                els.resultsSection.style.transform = 'translateY(0)';
+            }, 100);
+        }
     }
 }
 // Display results
@@ -2305,23 +2323,13 @@ function setupAIFeatures() {
     // Load alerts on init
     loadAlerts();
 }
-// Initialize app
+// Initialize app - ensure init() is called which sets up ALL event listeners
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
-        console.log('[ANALYSIS] DOM loaded, initializing...');
-        try {
-            initializePage();
-            setupAIFeatures();
-        } catch (e) {
-            console.error('[ANALYSIS] Initialization error:', e);
-        }
+        console.log('[ANALYSIS] DOM loaded, calling init()...');
+        init().catch(e => console.error('[ANALYSIS] Init error:', e));
     });
 } else {
-    console.log('[ANALYSIS] DOM already loaded, initializing...');
-    try {
-        initializePage();
-        setupAIFeatures();
-    } catch (e) {
-        console.error('[ANALYSIS] Initialization error:', e);
-    }
+    console.log('[ANALYSIS] DOM already loaded, calling init()...');
+    init().catch(e => console.error('[ANALYSIS] Init error:', e));
 }

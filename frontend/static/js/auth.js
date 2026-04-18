@@ -69,8 +69,14 @@ function switchTab(tab) {
  */
 function togglePassword(targetId) {
     const input = document.getElementById(targetId);
+    const btn = document.querySelector(`.toggle-password[data-target="${targetId}"]`);
     if (input) {
-        input.type = input.type === 'password' ? 'text' : 'password';
+        const isPassword = input.type === 'password';
+        input.type = isPassword ? 'text' : 'password';
+        // Update button icon
+        if (btn) {
+            btn.textContent = isPassword ? '🙈' : '👁';
+        }
     }
 }
 
@@ -134,9 +140,9 @@ async function handleLogin(e) {
 
         showToast('Login successful! Redirecting...', 'success');
         
-        // Redirect to analysis page
+        // Redirect to setup page for onboarding
         setTimeout(() => {
-            window.location.href = '/analysis.html';
+            window.location.href = '/setup.html';
         }, 1000);
         
     } catch (error) {
@@ -152,43 +158,43 @@ async function handleLogin(e) {
  */
 async function handleRegister(e) {
     e.preventDefault();
-    
+
     const name = document.getElementById('register-name').value.trim();
     const email = document.getElementById('register-email').value.trim();
     const password = document.getElementById('register-password').value;
     const confirm = document.getElementById('register-confirm').value;
     const agreeTerms = document.getElementById('agree-terms').checked;
-    
+
     // Validation
     if (!name) {
         showToast('Please enter your full name', 'error');
         return;
     }
-    
+
     if (!validateEmail(email)) {
         showToast('Please enter a valid email address', 'error');
         return;
     }
-    
+
     if (password.length < 8) {
         showToast('Password must be at least 8 characters', 'error');
         return;
     }
-    
+
     if (password !== confirm) {
         showToast('Passwords do not match', 'error');
         return;
     }
-    
+
     if (!agreeTerms) {
         showToast('Please agree to the terms of service', 'error');
         return;
     }
-    
+
     setLoading(true, 'register-form');
-    
+
     try {
-        // Call real backend API
+        // Call backend API to register
         const response = await fetch('/api/auth/register', {
             method: 'POST',
             headers: {
@@ -207,26 +213,57 @@ async function handleRegister(e) {
             throw new Error(errorData.detail || 'Registration failed');
         }
 
-        const data = await response.json();
+        const userData = await response.json();
+        console.log('Registration successful:', userData);
 
         showToast('Account created successfully! Logging you in...', 'success');
 
-        // Create user object
+        // Now auto-login the user
+        const loginResponse = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                username: email,
+                password: password
+            })
+        });
+
+        if (!loginResponse.ok) {
+            // If auto-login fails, redirect to login page
+            showToast('Registration successful! Please log in.', 'success');
+            setTimeout(() => {
+                switchTab('login');
+                document.getElementById('login-email').value = email;
+            }, 1500);
+            return;
+        }
+
+        const loginData = await loginResponse.json();
+
+        // Create user object with token
         const user = {
             email,
-            name,
+            name: userData.full_name || name,
             loginTime: Date.now(),
-            rememberMe: false
+            rememberMe: false,
+            access_token: loginData.access_token,
+            token_type: loginData.token_type || 'bearer',
+            user_id: userData.id
         };
-        
+
         // Store session
         storeSession(user, false);
-        
-        // Redirect to analysis page
+
+        // Store token for API requests
+        localStorage.setItem('access_token', loginData.access_token);
+
+        // Redirect to setup page for onboarding
         setTimeout(() => {
-            window.location.href = '/analysis.html';
+            window.location.href = '/setup.html';
         }, 1000);
-        
+
     } catch (error) {
         console.error('Register error:', error);
         showToast(error.message || 'Registration failed. Please try again.', 'error');
@@ -275,29 +312,38 @@ function storeSession(user, rememberMe) {
 function checkExistingSession() {
     // Check sessionStorage first (current session)
     let session = sessionStorage.getItem(AUTH_CONFIG.STORAGE_KEY);
-    
+
     // If not found, check localStorage (remember me)
     if (!session) {
         session = localStorage.getItem(AUTH_CONFIG.STORAGE_KEY);
     }
-    
+
     if (session) {
         try {
             const parsed = JSON.parse(session);
-            
+
             // Check if session is expired
             if (parsed.expires && Date.now() > parsed.expires) {
                 clearSession();
                 return;
             }
-            
+
             currentUser = parsed.user;
-            
-            // If user is already logged in and on auth page, redirect to analysis
+
+            // Restore access token from user object or localStorage
+            if (currentUser && currentUser.access_token) {
+                localStorage.setItem('access_token', currentUser.access_token);
+            }
+
+            // If user is already logged in and on auth page, redirect to appropriate page
             if (window.location.pathname.includes('auth.html')) {
-                window.location.href = '/analysis.html';
+                // Check if there's a redirect destination stored
+                const redirectTo = sessionStorage.getItem('auth_redirect') || '/analysis.html';
+                sessionStorage.removeItem('auth_redirect');
+                window.location.href = redirectTo;
             }
         } catch (e) {
+            console.error('Session parsing error:', e);
             clearSession();
         }
     }
@@ -392,6 +438,48 @@ function requireAuth() {
 }
 
 /**
+ * Make authenticated API request
+ * Automatically adds Authorization header if token is available
+ */
+async function authenticatedFetch(url, options = {}) {
+    const token = localStorage.getItem('access_token');
+
+    const defaultOptions = {
+        headers: {
+            'Content-Type': 'application/json',
+            ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+    };
+
+    const mergedOptions = {
+        ...defaultOptions,
+        ...options,
+        headers: {
+            ...defaultOptions.headers,
+            ...options.headers
+        }
+    };
+
+    try {
+        const response = await fetch(url, mergedOptions);
+
+        // Handle 401 Unauthorized - token expired or invalid
+        if (response.status === 401) {
+            console.warn('Authentication expired. Redirecting to login...');
+            clearSession();
+            sessionStorage.setItem('auth_redirect', window.location.pathname);
+            window.location.href = '/auth.html';
+            throw new Error('Session expired. Please log in again.');
+        }
+
+        return response;
+    } catch (error) {
+        console.error('Authenticated fetch error:', error);
+        throw error;
+    }
+}
+
+/**
  * Initialize on page load
  */
 document.addEventListener('DOMContentLoaded', initAuth);
@@ -402,5 +490,7 @@ window.AuthSystem = {
     isAuthenticated,
     logout,
     requireAuth,
-    showToast
+    showToast,
+    authenticatedFetch,
+    clearSession
 };

@@ -50,9 +50,9 @@ class SentimentAnalyzer:
             or os.getenv('FINNHUB_API_TOKEN')
         )
         self.finnhub_url = "https://finnhub.io/api/v1/company-news"
-        self.max_articles_to_analyze = 500
+        self.max_articles_to_analyze = 100  # Analyze at least 100 real articles
         self.min_articles_to_analyze = 50
-        self.top_impact_to_show = 15
+        self.top_impact_to_show = 15  # Show top 15 most impactful
         self.last_news_provider_stats: Dict[str, Any] = {}
         
         # Initialize transformer model for sentiment analysis

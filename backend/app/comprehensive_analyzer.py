@@ -682,7 +682,7 @@ class ComprehensiveStockAnalyzer:
                 timings['fundamental_ms'] = int((time.time() - fund_start) * 1000)
             
             try:
-                sentiment = sent_future.result(timeout=30)
+                sentiment = sent_future.result(timeout=90)  # 90s timeout for 100+ articles
                 timings['sentiment_ms'] = int((time.time() - sent_start) * 1000)
             except Exception as e:
                 print(f"Sentiment analysis failed: {e}")
@@ -696,7 +696,9 @@ class ComprehensiveStockAnalyzer:
                     'headlines_count': 0,
                     'sources': [],
                     'news_articles': [],
-                    'breakdown': {'positive': 0, 'negative': 0, 'neutral': 0}
+                    'breakdown': {'positive': 0, 'negative': 0, 'neutral': 0},
+                    'articles_count': 0,
+                    'api_capabilities': {}
                 }
                 timings['sentiment_ms'] = int((time.time() - sent_start) * 1000)
             
