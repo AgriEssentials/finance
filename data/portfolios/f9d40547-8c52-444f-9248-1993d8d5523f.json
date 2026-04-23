@@ -1,0 +1,70 @@
+{
+  "cash": 10915.0,
+  "initial_capital": 65875.0,
+  "is_setup": true,
+  "positions": [
+    {
+      "symbol": "RELIANCE",
+      "shares": 2,
+      "avg_cost": 123.0,
+      "current_price": 123.0,
+      "current_value": 0.0,
+      "unrealized_pnl": 0.0,
+      "unrealized_pnl_percent": 0.0,
+      "sector": null,
+      "last_updated": ""
+    },
+    {
+      "symbol": "INFY.NS",
+      "shares": 23,
+      "avg_cost": 543.0,
+      "current_price": 1240.5999755859375,
+      "current_value": 28533.799438476562,
+      "unrealized_pnl": 16044.799438476562,
+      "unrealized_pnl_percent": 128.47145038415056,
+      "sector": null,
+      "last_updated": "2026-04-23T15:39:40.244734"
+    },
+    {
+      "symbol": "ICICIBANK.NS",
+      "shares": 1,
+      "avg_cost": 1350.0,
+      "current_price": 1348.0,
+      "current_value": 1348.0,
+      "unrealized_pnl": -2.0,
+      "unrealized_pnl_percent": -0.14814814814814814,
+      "sector": "Financial",
+      "last_updated": "2026-04-23T15:39:40.287685"
+    }
+  ],
+  "transactions": [
+    {
+      "symbol": "RELIANCE",
+      "action": "buy",
+      "shares": 2,
+      "price": 123.0,
+      "date": "2026-04-23T08:25:47.480316",
+      "fees": 0.0,
+      "total_amount": 246.0
+    },
+    {
+      "symbol": "INFY.NS",
+      "action": "buy",
+      "shares": 23,
+      "price": 543.0,
+      "date": "2026-04-23T08:25:47.483813",
+      "fees": 0.0,
+      "total_amount": 12489.0
+    },
+    {
+      "symbol": "ICICIBANK.NS",
+      "action": "buy",
+      "shares": 1,
+      "price": 1350.0,
+      "date": "2026-04-23T08:35:15.303123",
+      "fees": 0.0,
+      "total_amount": 1350.0
+    }
+  ],
+  "last_saved": "2026-04-23T15:39:40.288300"
+}

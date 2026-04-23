@@ -28,12 +28,14 @@ def get_db():
         db.close()
 
 class User(Base):
+    """Legacy User model - kept for backward compatibility with existing data
+    New authentication uses Supabase Auth exclusively"""
     __tablename__ = "users"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(String(255), primary_key=True, index=True)  # Now stores Supabase UUID
     email = Column(String(255), unique=True, index=True, nullable=False)
     username = Column(String(100), unique=True, index=True, nullable=False)
-    hashed_password = Column(String(255), nullable=False)
+    hashed_password = Column(String(255), nullable=True)  # Nullable since auth is in Supabase
     full_name = Column(String(255))
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
@@ -56,7 +58,7 @@ class Watchlist(Base):
     __tablename__ = "watchlists"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(String(255), ForeignKey("users.id"), nullable=False)
     name = Column(String(100), nullable=False)
     description = Column(Text)
     is_default = Column(Boolean, default=False)
@@ -92,7 +94,7 @@ class Alert(Base):
     __tablename__ = "alerts"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(String(255), ForeignKey("users.id"), nullable=False)
     symbol = Column(String(50), nullable=False, index=True)
     alert_type = Column(String(50), nullable=False)  # price, indicator, news, volume
     condition = Column(String(50), nullable=False)  # above, below, crosses_above, crosses_below
@@ -112,7 +114,7 @@ class Portfolio(Base):
     __tablename__ = "portfolios"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    user_id = Column(String(255), ForeignKey("users.id"), unique=True, nullable=False)
     total_value = Column(Float, default=0.0)
     cash_balance = Column(Float, default=0.0)
     total_invested = Column(Float, default=0.0)
@@ -166,7 +168,7 @@ class PaperTrade(Base):
     __tablename__ = "paper_trades"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(String(255), ForeignKey("users.id"), nullable=False)
     symbol = Column(String(50), nullable=False, index=True)
     trade_type = Column(String(10), nullable=False)  # BUY, SELL
     entry_price = Column(Float, nullable=False)
@@ -189,7 +191,7 @@ class Strategy(Base):
     __tablename__ = "strategies"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(String(255), ForeignKey("users.id"), nullable=False)
     name = Column(String(100), nullable=False)
     description = Column(Text)
     strategy_type = Column(String(50), nullable=False)  # momentum, mean_reversion, breakout, etc.
@@ -235,7 +237,7 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Can be null for anonymous actions
+    user_id = Column(String(255), ForeignKey("users.id"), nullable=True)  # Can be null for anonymous actions
     action = Column(String(100), nullable=False, index=True)
     resource_type = Column(String(50), nullable=False)  # user, portfolio, alert, etc.
     resource_id = Column(String(100))

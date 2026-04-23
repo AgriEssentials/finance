@@ -55,7 +55,7 @@ class AlertManager:
     
     def create_alert(
         self,
-        user_id: int,
+        user_id: str,
         symbol: str,
         alert_type: AlertType,
         condition: AlertCondition,
@@ -103,7 +103,7 @@ class AlertManager:
     
     def get_user_alerts(
         self,
-        user_id: int,
+        user_id: str,
         active_only: bool = True,
         symbol: Optional[str] = None
     ) -> List[Dict[str, Any]]:
@@ -127,7 +127,7 @@ class AlertManager:
         alerts = query.order_by(Alert.created_at.desc()).all()
         return [self._alert_to_dict(alert) for alert in alerts]
     
-    def get_alert(self, alert_id: int, user_id: int) -> Optional[Dict[str, Any]]:
+    def get_alert(self, alert_id: int, user_id: str) -> Optional[Dict[str, Any]]:
         """Get a specific alert"""
         alert = self.db.query(Alert).filter(
             and_(Alert.id == alert_id, Alert.user_id == user_id)
@@ -140,7 +140,7 @@ class AlertManager:
     def update_alert(
         self,
         alert_id: int,
-        user_id: int,
+        user_id: str,
         value: Optional[float] = None,
         message: Optional[str] = None,
         is_active: Optional[bool] = None,
@@ -173,7 +173,7 @@ class AlertManager:
         
         return self._alert_to_dict(alert)
     
-    def delete_alert(self, alert_id: int, user_id: int) -> bool:
+    def delete_alert(self, alert_id: int, user_id: str) -> bool:
         """Delete an alert"""
         alert = self.db.query(Alert).filter(
             and_(Alert.id == alert_id, Alert.user_id == user_id)
@@ -359,7 +359,7 @@ class AlertManager:
         
         await streamer.broadcast_alert(data['symbol'], data)
     
-    def get_triggered_alerts(self, user_id: int, since: Optional[datetime] = None) -> List[Dict[str, Any]]:
+    def get_triggered_alerts(self, user_id: str, since: Optional[datetime] = None) -> List[Dict[str, Any]]:
         """Get all triggered alerts for a user"""
         query = self.db.query(Alert).filter(
             and_(
@@ -374,7 +374,7 @@ class AlertManager:
         alerts = query.order_by(Alert.triggered_at.desc()).all()
         return [self._alert_to_dict(alert) for alert in alerts]
     
-    def reactivate_alert(self, alert_id: int, user_id: int) -> Dict[str, Any]:
+    def reactivate_alert(self, alert_id: int, user_id: str) -> Dict[str, Any]:
         """Reactivate a triggered alert"""
         alert = self.db.query(Alert).filter(
             and_(Alert.id == alert_id, Alert.user_id == user_id)
@@ -397,7 +397,7 @@ class AlertManager:
     
     def create_batch_alerts(
         self,
-        user_id: int,
+        user_id: str,
         alerts_data: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """Create multiple alerts at once"""

@@ -25,7 +25,7 @@ class TradeType(str, Enum):
 class PaperTradingManager:
     """Manage paper trading system"""
     
-    def __init__(self, db: Session, user_id: int):
+    def __init__(self, db: Session,         user_id: str):
         self.db = db
         self.user_id = user_id
         self.initial_balance = 1000000.0  # 10 Lakhs INR default
@@ -475,6 +475,6 @@ class PaperTradingManager:
         }
 
 # Factory function
-def get_paper_trading_manager(db: Session, user_id: int) -> PaperTradingManager:
+def get_paper_trading_manager(db: Session,         user_id: str) -> PaperTradingManager:
     """Get paper trading manager instance"""
     return PaperTradingManager(db, user_id)

@@ -1,0 +1,72 @@
+SUPABASE FIX INSTRUCTIONS
+=========================
+
+PROBLEM: Your auth.users table is corrupted (can read but not write)
+
+SOLUTION: Create a NEW Supabase project (takes 2 minutes)
+
+STEP-BY-STEP:
+
+1. Open https://app.supabase.com in your browser
+
+2. Click the green "New Project" button
+
+3. Select your organization
+
+4. Fill in:
+   - Project name: quant-terminal-v2
+   - Database password: (generate a strong one, save it)
+   - Region: Choose closest to you (e.g., Singapore, Mumbai, or US East)
+
+5. Click "Create New Project"
+
+6. Wait 2-3 minutes for it to be created
+
+7. Once ready, click your new project
+
+8. Go to Project Settings (gear icon) → API
+
+9. Copy these 3 values:
+   - URL (starts with https://)
+   - anon public (starts with eyJhbG...)
+   - service_role secret (starts with eyJhbG...)
+
+10. Open this file on your computer:
+    C:\Users\user\Desktop\father\.env
+
+11. Replace lines 8-10 with the NEW values:
+
+    SUPABASE_URL=https://your-new-project.supabase.co
+    SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.your-new-anon-key
+    SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.your-new-service-key
+
+12. Save the file
+
+13. Restart your app - it will work!
+
+-------------------------
+
+ALTERNATIVE: Try to fix current project
+
+1. Go to https://app.supabase.com/project/nveqpgqiqiilnagcqsib
+
+2. Click "SQL Editor" in left sidebar
+
+3. Click "New Query"
+
+4. Paste this SQL:
+
+   DROP SCHEMA IF EXISTS auth CASCADE;
+   CREATE SCHEMA auth;
+
+5. Click "Run"
+
+6. Go to Authentication → Settings
+
+7. Toggle "Disable new users" ON then OFF
+
+8. Wait 30 seconds
+
+9. Test registration
+
+If this doesn't work, create a new project (method above)

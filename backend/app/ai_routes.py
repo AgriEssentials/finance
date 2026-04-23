@@ -15,6 +15,7 @@ from app.backtester import backtest_engine, strategy_builder
 from app.sentiment import sentiment_analyzer
 from app.database import get_db, User
 from app.auth import get_current_user_optional
+from app.supabase_auth import SupabaseUser
 import yfinance as yf
 import math
 from datetime import datetime
@@ -52,7 +53,7 @@ def _fetch_close_prices(symbol: str, period: str = "2y") -> np.ndarray:
 async def train_lstm_model(
     symbol: str = Query(..., description="Stock symbol"),
     epochs: int = Query(20, description="Training epochs"),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """LSTM training endpoint - DISABLED for memory optimization"""
     return {
@@ -67,7 +68,7 @@ async def train_lstm_model(
 @router.get("/lstm/predict")
 async def lstm_predict(
     symbol: str = Query(..., description="Stock symbol"),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Get lightweight price predictions using statistical methods"""
     try:
@@ -114,7 +115,7 @@ async def lstm_predict(
 async def train_transformer_model(
     symbol: str = Query(...),
     epochs: int = Query(15),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Transformer training endpoint - DISABLED for memory optimization"""
     return {
@@ -129,7 +130,7 @@ async def train_transformer_model(
 @router.get("/transformer/predict")
 async def transformer_predict(
     symbol: str = Query(...),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Get lightweight transformer-style predictions using trend analysis"""
     try:
@@ -180,7 +181,7 @@ async def transformer_predict(
 @router.get("/portfolio/optimize")
 async def optimize_portfolio(
     symbols: List[str] = Query(..., description="List of stock symbols"),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Get RL-optimized portfolio allocation"""
     try:
@@ -237,7 +238,7 @@ async def explain_prediction(
     prediction: str = Query(..., description="BUY/SELL/HOLD"),
     confidence: float = Query(...),
     indicators: Optional[str] = Query(None),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Get explainable reasons for prediction"""
     try:
@@ -311,7 +312,7 @@ async def create_alert(
     symbol: str = Query(...),
     alert_type: str = Query(..., description="price_above, price_below, sentiment_positive, etc"),
     threshold: float = Query(...),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Create price or sentiment alert"""
     try:
@@ -335,7 +336,7 @@ async def create_alert(
 
 @router.get("/alerts")
 async def get_alerts(
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Get user alerts"""
     user_id = str(current_user.id) if current_user else "guest"
@@ -346,7 +347,7 @@ async def get_alerts(
 @router.get("/alerts/evaluate")
 async def evaluate_alerts(
     symbol: Optional[str] = Query(None, description="Optional symbol to evaluate"),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Evaluate active alerts with latest market/sentiment data and return triggered alerts."""
     try:
@@ -403,7 +404,7 @@ async def evaluate_alerts(
 @router.delete("/alerts/{alert_id}")
 async def delete_alert(
     alert_id: str,
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Delete alert"""
     success = alert_manager.delete_alert(alert_id)
@@ -422,7 +423,7 @@ async def backtest_rsi(
     symbol: str = Query(...),
     oversold: int = Query(30),
     overbought: int = Query(70),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Backtest RSI strategy"""
     try:
@@ -470,7 +471,7 @@ async def backtest_rsi(
 @router.get("/backtest/macd-strategy")
 async def backtest_macd(
     symbol: str = Query(...),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Backtest MACD strategy"""
     try:

@@ -1,37 +1,124 @@
 """
-Redis Caching and Rate Limiting Module
+Enhanced Multi-Layer Caching and Rate Limiting Module
+Provides Redis + In-Memory caching for maximum performance
 """
 
 import redis
 import json
 import pickle
-from typing import Optional, Any, Dict, List
-from datetime import datetime, timedelta
-from functools import wraps
 import hashlib
 import os
-from fastapi import HTTPException, Request, Depends
-
+import time
+import threading
+from typing import Optional, Any, Dict, List, Callable
+from datetime import datetime, timedelta
+from functools import wraps
+from fastapi import HTTPException, Request
 
 # Redis Configuration
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
-class RedisCache:
-    """Redis caching manager for stock data and analysis results"""
+
+class InMemoryCache:
+    """Thread-safe in-memory cache with TTL support"""
+    
+    def __init__(self, max_size: int = 1000):
+        self._cache: Dict[str, Dict[str, Any]] = {}
+        self._lock = threading.RLock()
+        self._max_size = max_size
+        self._hits = 0
+        self._misses = 0
+    
+    def _cleanup_expired(self):
+        """Remove expired entries"""
+        now = time.time()
+        with self._lock:
+            expired = [k for k, v in self._cache.items() if v['expiry'] < now]
+            for k in expired:
+                del self._cache[k]
+    
+    def _evict_if_needed(self):
+        """Evict oldest entries if cache is full"""
+        with self._lock:
+            if len(self._cache) >= self._max_size:
+                # Remove oldest 10% of entries
+                sorted_items = sorted(self._cache.items(), key=lambda x: x[1]['accessed'])
+                to_remove = int(self._max_size * 0.1)
+                for k, _ in sorted_items[:to_remove]:
+                    del self._cache[k]
+    
+    def get(self, key: str) -> Optional[Any]:
+        """Get value from cache"""
+        with self._lock:
+            if key in self._cache:
+                entry = self._cache[key]
+                if entry['expiry'] > time.time():
+                    entry['accessed'] = time.time()
+                    self._hits += 1
+                    return entry['value']
+                else:
+                    del self._cache[key]
+            self._misses += 1
+            return None
+    
+    def set(self, key: str, value: Any, ttl: int) -> bool:
+        """Set value in cache with TTL (seconds)"""
+        self._cleanup_expired()
+        self._evict_if_needed()
+        
+        with self._lock:
+            self._cache[key] = {
+                'value': value,
+                'expiry': time.time() + ttl,
+                'accessed': time.time()
+            }
+        return True
+    
+    def delete(self, key: str) -> bool:
+        """Delete key from cache"""
+        with self._lock:
+            if key in self._cache:
+                del self._cache[key]
+                return True
+        return False
+    
+    def clear(self):
+        """Clear all cache entries"""
+        with self._lock:
+            self._cache.clear()
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get cache statistics"""
+        with self._lock:
+            total = self._hits + self._misses
+            hit_rate = self._hits / total if total > 0 else 0
+            return {
+                'size': len(self._cache),
+                'max_size': self._max_size,
+                'hits': self._hits,
+                'misses': self._misses,
+                'hit_rate': round(hit_rate, 3)
+            }
+
+
+class MultiLayerCache:
+    """Multi-layer caching manager combining Redis and In-Memory caching"""
     
     def __init__(self, redis_url: str = REDIS_URL):
+        self.memory_cache = InMemoryCache(max_size=2000)
         self.redis_client = None
         self.redis_binary = None
         self._connected = False
         
+        # Try to connect to Redis
         try:
             self.redis_client = redis.from_url(redis_url, decode_responses=True, socket_connect_timeout=2)
             self.redis_binary = redis.from_url(redis_url, decode_responses=False, socket_connect_timeout=2)
-            # Test connection
             self.redis_client.ping()
             self._connected = True
+            print("[CACHE] Redis connected successfully")
         except Exception as e:
-            print(f"[WARNING] Redis not available (caching disabled): {e}")
+            print(f"[CACHE] Redis not available, using in-memory cache only: {e}")
             self.redis_client = None
             self.redis_binary = None
             self._connected = False
@@ -44,10 +131,13 @@ class RedisCache:
             'sentiment': 600,            # 10 minutes for sentiment
             'fundamental': 3600,         # 1 hour for fundamentals
             'analysis': 180,             # 3 minutes for analysis
-            'news': 300,                 # 5 minutes for news
+            'news': 300,               # 5 minutes for news
             'market_scanner': 60,        # 1 minute for scanner data
             'user_session': 1800,        # 30 minutes for sessions
-            'api_response': 60,          # 1 minute for API responses
+            'api_response': 60,        # 1 minute for API responses
+            'market_indices': 120,      # 2 minutes for market indices
+            'sparklines': 300,          # 5 minutes for sparkline data
+            'landing_data': 60,          # 1 minute for landing page data
         }
     
     def _generate_key(self, prefix: str, identifier: str) -> str:
@@ -59,95 +149,197 @@ class RedisCache:
         """Check if Redis is connected"""
         return self._connected and self.redis_client is not None
     
-    def get(self, key: str) -> Optional[Any]:
-        """Get value from cache"""
+    def get(self, key: str, use_memory: bool = True) -> Optional[Any]:
+        """
+        Get value from cache (memory first, then Redis)
+        
+        Args:
+            key: Cache key
+            use_memory: Whether to check memory cache first
+        
+        Returns:
+            Cached value or None
+        """
+        # Check memory cache first (faster)
+        if use_memory:
+            value = self.memory_cache.get(key)
+            if value is not None:
+                return value
+        
+        # Check Redis
         if not self.is_connected():
             return None
+        
         try:
             value = self.redis_client.get(key)
             if value:
-                return json.loads(value)
+                result = json.loads(value)
+                # Populate memory cache for faster future access
+                if use_memory:
+                    ttl = self.redis_client.ttl(key)
+                    if ttl > 0:
+                        self.memory_cache.set(key, result, min(ttl, 300))
+                return result
             return None
-        except Exception as e:
-            # Silently fail - cache is optional
+        except Exception:
             return None
     
-    def get_binary(self, key: str) -> Optional[Any]:
-        """Get binary data from cache (for complex objects)"""
+    def get_binary(self, key: str, use_memory: bool = True) -> Optional[Any]:
+        """Get binary data from cache"""
+        # Check memory cache first
+        if use_memory:
+            value = self.memory_cache.get(key)
+            if value is not None:
+                return value
+        
         if not self.is_connected():
             return None
+        
         try:
             value = self.redis_binary.get(key)
             if value:
-                return pickle.loads(value)
+                result = pickle.loads(value)
+                # Populate memory cache
+                if use_memory:
+                    ttl = self.redis_binary.ttl(key)
+                    if ttl > 0:
+                        self.memory_cache.set(key, result, min(ttl, 300))
+                return result
             return None
-        except Exception as e:
-            # Silently fail - cache is optional
+        except Exception:
             return None
     
-    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
-        """Set value in cache"""
-        if not self.is_connected():
-            return False
-        try:
-            serialized = json.dumps(value, default=str)
-            if ttl:
-                self.redis_client.setex(key, ttl, serialized)
-            else:
-                self.redis_client.set(key, serialized)
-            return True
-        except Exception as e:
-            # Silently fail - cache is optional
-            return False
+    def set(self, key: str, value: Any, ttl: Optional[int] = None, 
+            use_memory: bool = True, memory_ttl: Optional[int] = None) -> bool:
+        """
+        Set value in both memory and Redis cache
+        
+        Args:
+            key: Cache key
+            value: Value to cache
+            ttl: Redis TTL in seconds
+            use_memory: Whether to also cache in memory
+            memory_ttl: Memory cache TTL (defaults to min(ttl, 300))
+        """
+        success = True
+        
+        # Clean value before caching (handle NaN, Infinity)
+        cleaned_value = self._clean_for_json(value)
+        
+        # Set in memory cache
+        if use_memory:
+            mem_ttl = memory_ttl or min(ttl or 60, 300)
+            self.memory_cache.set(key, cleaned_value, mem_ttl)
+        
+        # Set in Redis
+        if self.is_connected():
+            try:
+                serialized = json.dumps(cleaned_value, default=self._json_serializer)
+                if ttl:
+                    self.redis_client.setex(key, ttl, serialized)
+                else:
+                    self.redis_client.set(key, serialized)
+            except Exception as e:
+                print(f"[CACHE] Error serializing data for key {key}: {e}")
+                success = False
+        
+        return success
     
-    def set_binary(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
+    def _clean_for_json(self, obj: Any) -> Any:
+        """Clean object for JSON serialization (remove NaN, Infinity)"""
+        import math
+        
+        if isinstance(obj, dict):
+            return {k: self._clean_for_json(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._clean_for_json(item) for item in obj]
+        elif isinstance(obj, float):
+            if math.isnan(obj) or math.isinf(obj):
+                return None
+            return obj
+        elif isinstance(obj, (int, str, bool, type(None))):
+            return obj
+        else:
+            # Convert other types to string
+            return str(obj)
+    
+    def _json_serializer(self, obj: Any) -> Any:
+        """Custom JSON serializer for special types"""
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        elif isinstance(obj, (int, float)):
+            import math
+            if math.isnan(obj) or math.isinf(obj):
+                return None
+            return obj
+        return str(obj)
+    
+    def set_binary(self, key: str, value: Any, ttl: Optional[int] = None,
+                   use_memory: bool = True, memory_ttl: Optional[int] = None) -> bool:
         """Set binary data in cache"""
-        if not self.is_connected():
-            return False
-        try:
-            serialized = pickle.dumps(value)
-            if ttl:
-                self.redis_binary.setex(key, ttl, serialized)
-            else:
-                self.redis_binary.set(key, serialized)
-            return True
-        except Exception as e:
-            # Silently fail - cache is optional
-            return False
+        success = True
+        
+        # Set in memory cache
+        if use_memory:
+            mem_ttl = memory_ttl or min(ttl or 60, 300)
+            self.memory_cache.set(key, value, mem_ttl)
+        
+        # Set in Redis
+        if self.is_connected():
+            try:
+                serialized = pickle.dumps(value)
+                if ttl:
+                    self.redis_binary.setex(key, ttl, serialized)
+                else:
+                    self.redis_binary.set(key, serialized)
+            except Exception:
+                success = False
+        
+        return success
     
     def delete(self, key: str) -> bool:
-        """Delete key from cache"""
-        if not self.is_connected():
-            return False
-        try:
-            self.redis_client.delete(key)
-            return True
-        except Exception as e:
-            print(f"Cache delete error: {e}")
-            return False
+        """Delete key from all cache layers"""
+        self.memory_cache.delete(key)
+        
+        if self.is_connected():
+            try:
+                self.redis_client.delete(key)
+                return True
+            except Exception:
+                return False
+        return True
     
     def delete_pattern(self, pattern: str) -> int:
-        """Delete all keys matching pattern"""
-        if not self.is_connected():
-            return 0
-        try:
-            keys = self.redis_client.keys(pattern)
-            if keys:
-                return self.redis_client.delete(*keys)
-            return 0
-        except Exception as e:
-            print(f"Cache delete pattern error: {e}")
-            return 0
+        """Delete all keys matching pattern from Redis"""
+        deleted = 0
+        
+        # Clear memory cache entirely for simplicity
+        if '*' in pattern or '?' in pattern:
+            self.memory_cache.clear()
+        
+        if self.is_connected():
+            try:
+                keys = self.redis_client.keys(pattern)
+                if keys:
+                    deleted = self.redis_client.delete(*keys)
+            except Exception as e:
+                print(f"Cache delete pattern error: {e}")
+        
+        return deleted
     
     def exists(self, key: str) -> bool:
-        """Check if key exists"""
-        if not self.is_connected():
-            return False
-        try:
-            return self.redis_client.exists(key) > 0
-        except Exception as e:
-            print(f"Cache exists error: {e}")
-            return False
+        """Check if key exists in any cache layer"""
+        if self.memory_cache.get(key) is not None:
+            return True
+        
+        if self.is_connected():
+            try:
+                return self.redis_client.exists(key) > 0
+            except Exception:
+                return False
+        return False
+    
+    # Specialized cache methods for stock data
     
     def get_stock_price(self, symbol: str) -> Optional[Dict]:
         """Get cached stock price"""
@@ -215,6 +407,36 @@ class RedisCache:
         key = self._generate_key("analysis", identifier)
         return self.set(key, data, self.ttls['analysis'])
     
+    def get_market_indices(self) -> Optional[Dict]:
+        """Get cached market indices data"""
+        key = self._generate_key("market", "indices")
+        return self.get(key)
+    
+    def set_market_indices(self, data: Dict) -> bool:
+        """Cache market indices data"""
+        key = self._generate_key("market", "indices")
+        return self.set(key, data, self.ttls['market_indices'])
+    
+    def get_sparklines(self) -> Optional[Dict]:
+        """Get cached sparkline data"""
+        key = self._generate_key("market", "sparklines")
+        return self.get(key)
+    
+    def set_sparklines(self, data: Dict) -> bool:
+        """Cache sparkline data"""
+        key = self._generate_key("market", "sparklines")
+        return self.set(key, data, self.ttls['sparklines'])
+    
+    def get_landing_data(self) -> Optional[Dict]:
+        """Get cached landing page data"""
+        key = self._generate_key("market", "landing")
+        return self.get(key)
+    
+    def set_landing_data(self, data: Dict) -> bool:
+        """Cache landing page data"""
+        key = self._generate_key("market", "landing")
+        return self.set(key, data, self.ttls['landing_data'])
+    
     def invalidate_symbol(self, symbol: str) -> int:
         """Invalidate all cached data for a symbol"""
         patterns = [
@@ -250,7 +472,7 @@ class RedisCache:
             return 0
         try:
             return self.redis_client.incrby(key, amount)
-        except Exception as e:
+        except Exception:
             return 0
     
     def get_counter(self, key: str) -> int:
@@ -260,7 +482,7 @@ class RedisCache:
         try:
             value = self.redis_client.get(key)
             return int(value) if value else 0
-        except Exception as e:
+        except Exception:
             return 0
     
     def set_counter_expiry(self, key: str, seconds: int):
@@ -269,27 +491,37 @@ class RedisCache:
             return
         try:
             self.redis_client.expire(key, seconds)
-        except Exception as e:
+        except Exception:
             pass
     
     def get_cache_stats(self) -> Dict:
-        """Get cache statistics"""
-        if not self.is_connected():
-            return {"status": "disconnected"}
-        try:
-            info = self.redis_client.info()
-            return {
-                "used_memory": info.get("used_memory_human", "N/A"),
-                "connected_clients": info.get("connected_clients", 0),
-                "total_keys": self.redis_client.dbsize(),
-                "hit_rate": info.get("keyspace_hits", 0) / max(1, info.get("keyspace_hits", 0) + info.get("keyspace_misses", 0)),
-                "uptime": info.get("uptime_in_seconds", 0)
-            }
-        except Exception as e:
-            return {"status": "error", "error": str(e)}
+        """Get comprehensive cache statistics"""
+        stats = {
+            'memory_cache': self.memory_cache.get_stats(),
+            'redis': {'status': 'disconnected'},
+            'ttls': self.ttls
+        }
+        
+        if self.is_connected():
+            try:
+                info = self.redis_client.info()
+                stats['redis'] = {
+                    'status': 'connected',
+                    'used_memory': info.get("used_memory_human", "N/A"),
+                    'connected_clients': info.get("connected_clients", 0),
+                    'total_keys': self.redis_client.dbsize(),
+                    'hit_rate': info.get("keyspace_hits", 0) / max(1, info.get("keyspace_hits", 0) + info.get("keyspace_misses", 0)),
+                    'uptime': info.get("uptime_in_seconds", 0)
+                }
+            except Exception as e:
+                stats['redis'] = {'status': 'error', 'error': str(e)}
+        
+        return stats
+
 
 # Global cache instance
-cache = RedisCache()
+cache = MultiLayerCache()
+
 
 # Rate Limiting Configuration
 RATE_LIMITS = {
@@ -302,24 +534,23 @@ RATE_LIMITS = {
     "auth": "10/minute",
 }
 
+
 class RateLimitExceeded(HTTPException):
     def __init__(self, detail: str = "Rate limit exceeded"):
         super().__init__(status_code=429, detail=detail)
 
-def get_rate_limit_key(request: Request, user_id: Optional[int] = None) -> str:
+
+def get_rate_limit_key(request: Request, user_id: Optional[str] = None) -> str:
     """Generate rate limit key based on user or IP"""
     if user_id:
         return f"rate_limit:user:{user_id}"
     
     # Use X-Forwarded-For if behind proxy, otherwise use client host
-    client_ip = request.headers.get("X-Forwarded-For", request.client.host)
+    client_ip = request.headers.get("X-Forwarded-For", request.client.host if request.client else "unknown")
     return f"rate_limit:ip:{client_ip}"
 
-def check_rate_limit(
-    key: str,
-    limit: int,
-    window: int,
-) -> tuple[bool, int, int]:
+
+def check_rate_limit(key: str, limit: int, window: int) -> tuple[bool, int, int]:
     """
     Check if request is within rate limit
     Returns: (allowed, remaining, reset_time)
@@ -330,32 +561,28 @@ def check_rate_limit(
     
     try:
         current = cache.get_counter(key)
-
+        
         if current == 0:
             # First request, set expiry
             cache.set_counter_expiry(key, window)
-
+        
         if current >= limit:
             # Rate limit exceeded
             ttl = cache.redis_client.ttl(key) if cache.is_connected() else window
             return False, 0, ttl
-
+        
         # Increment counter
         new_count = cache.increment_counter(key)
         remaining = max(0, limit - new_count)
         ttl = cache.redis_client.ttl(key) if cache.is_connected() else window
-
+        
         return True, remaining, ttl
-    except Exception as e:
+    except Exception:
         # If Redis is unavailable, allow the request
-        # This prevents total outage when cache is down
         return True, limit, window
 
-def rate_limit(
-    requests: int = 100,
-    window: int = 60,
-    key_func = get_rate_limit_key
-):
+
+def rate_limit(requests: int = 100, window: int = 60, key_func = get_rate_limit_key):
     """Rate limiting decorator"""
     def decorator(func):
         @wraps(func)
@@ -400,54 +627,72 @@ def rate_limit(
         return wrapper
     return decorator
 
+
 # Cached decorator for function results
-def cached(ttl: Optional[int] = None, key_prefix: str = "func"):
-    """Decorator to cache function results"""
+def cached(ttl: Optional[int] = None, key_prefix: str = "func", 
+           use_memory: bool = True, skip_args: Optional[List[int]] = None):
+    """
+    Decorator to cache function results
+    
+    Args:
+        ttl: Cache TTL in seconds
+        key_prefix: Prefix for cache key
+        use_memory: Whether to use memory cache
+        skip_args: Argument indices to skip when generating cache key (e.g., for request objects)
+    """
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
             # Generate cache key from function name and arguments
-            cache_key = f"{key_prefix}:{func.__name__}:{str(args)}:{str(sorted(kwargs.items()))}"
+            cache_args = args
+            if skip_args:
+                cache_args = tuple(arg for i, arg in enumerate(args) if i not in skip_args)
+            
+            # Convert kwargs to sorted items, excluding common non-cacheable parameters
+            skip_kwargs = {'request', 'current_user', 'db', 'background_tasks'}
+            cache_kwargs = {k: v for k, v in sorted(kwargs.items()) if k not in skip_kwargs}
+            
+            cache_key = f"{key_prefix}:{func.__name__}:{str(cache_args)}:{str(cache_kwargs.items())}"
             cache_key = hashlib.md5(cache_key.encode()).hexdigest()
             
             # Try to get from cache
-            cached_result = cache.get(cache_key)
+            cached_result = cache.get(cache_key, use_memory=use_memory)
             if cached_result is not None:
-                return cached_result
+                # Add cache hit header if response object
+                result = cached_result
+                if isinstance(result, dict):
+                    result['_cache_hit'] = True
+                return result
             
             # Call function
             result = await func(*args, **kwargs)
             
             # Cache result
-            cache.set(cache_key, result, ttl or cache.ttls['api_response'])
+            cache.set(cache_key, result, ttl or cache.ttls['api_response'], use_memory=use_memory)
+            
+            # Add cache miss indicator
+            if isinstance(result, dict):
+                result['_cache_hit'] = False
             
             return result
         return wrapper
     return decorator
 
-# Rate Limiting Dependencies for FastAPI
-from fastapi import Request, Depends
 
-async def get_rate_limit_key(request: Request, user_id: Optional[int] = None) -> str:
+# Rate Limiting Dependencies for FastAPI
+async def get_rate_limit_key_dependency(request: Request, user_id: Optional[str] = None) -> str:
     """Generate rate limit key based on user or IP"""
     if user_id:
         return f"rate_limit:user:{user_id}"
     client_ip = request.headers.get("X-Forwarded-For", request.client.host if request.client else "unknown")
     return f"rate_limit:ip:{client_ip}"
 
-# Rate limiter instances
-limiter_default = type('obj', (object,), {'requests': 100, 'window': 60})()
-limiter_analyze = type('obj', (object,), {'requests': 30, 'window': 60})()
-limiter_professional = type('obj', (object,), {'requests': 10, 'window': 60})()
-limiter_scanner = type('obj', (object,), {'requests': 60, 'window': 60})()
-limiter_backtest = type('obj', (object,), {'requests': 5, 'window': 60})()
-limiter_train = type('obj', (object,), {'requests': 3, 'window': 60})()
-limiter_auth = type('obj', (object,), {'requests': 10, 'window': 60})()
 
+# Rate limiter dependency functions
 async def rate_limit_default(request: Request):
     """Rate limit for default endpoints: 100/minute"""
     try:
-        key = await get_rate_limit_key(request)
+        key = await get_rate_limit_key_dependency(request)
         allowed, remaining, reset_time = check_rate_limit(key, 100, 60)
         if not allowed:
             raise RateLimitExceeded(f"Rate limit exceeded. Try again in {reset_time} seconds")
@@ -455,13 +700,13 @@ async def rate_limit_default(request: Request):
     except RateLimitExceeded:
         raise
     except Exception:
-        # If rate limiting fails, allow the request
         pass
+
 
 async def rate_limit_analyze(request: Request):
     """Rate limit for analyze endpoints: 30/minute"""
     try:
-        key = await get_rate_limit_key(request)
+        key = await get_rate_limit_key_dependency(request)
         allowed, remaining, reset_time = check_rate_limit(key, 30, 60)
         if not allowed:
             raise RateLimitExceeded(f"Rate limit exceeded. Try again in {reset_time} seconds")
@@ -471,10 +716,11 @@ async def rate_limit_analyze(request: Request):
     except Exception:
         pass
 
+
 async def rate_limit_professional(request: Request):
     """Rate limit for professional endpoints: 10/minute"""
     try:
-        key = await get_rate_limit_key(request)
+        key = await get_rate_limit_key_dependency(request)
         allowed, remaining, reset_time = check_rate_limit(key, 10, 60)
         if not allowed:
             raise RateLimitExceeded(f"Rate limit exceeded. Try again in {reset_time} seconds")
@@ -484,10 +730,11 @@ async def rate_limit_professional(request: Request):
     except Exception:
         pass
 
+
 async def rate_limit_scanner(request: Request):
     """Rate limit for scanner endpoints: 60/minute"""
     try:
-        key = await get_rate_limit_key(request)
+        key = await get_rate_limit_key_dependency(request)
         allowed, remaining, reset_time = check_rate_limit(key, 60, 60)
         if not allowed:
             raise RateLimitExceeded(f"Rate limit exceeded. Try again in {reset_time} seconds")
@@ -497,10 +744,11 @@ async def rate_limit_scanner(request: Request):
     except Exception:
         pass
 
+
 async def rate_limit_backtest(request: Request):
     """Rate limit for backtest endpoints: 5/minute"""
     try:
-        key = await get_rate_limit_key(request)
+        key = await get_rate_limit_key_dependency(request)
         allowed, remaining, reset_time = check_rate_limit(key, 5, 60)
         if not allowed:
             raise RateLimitExceeded(f"Rate limit exceeded. Try again in {reset_time} seconds")
@@ -510,10 +758,11 @@ async def rate_limit_backtest(request: Request):
     except Exception:
         pass
 
+
 async def rate_limit_train(request: Request):
     """Rate limit for train endpoints: 3/minute"""
     try:
-        key = await get_rate_limit_key(request)
+        key = await get_rate_limit_key_dependency(request)
         allowed, remaining, reset_time = check_rate_limit(key, 3, 60)
         if not allowed:
             raise RateLimitExceeded(f"Rate limit exceeded. Try again in {reset_time} seconds")
@@ -523,10 +772,11 @@ async def rate_limit_train(request: Request):
     except Exception:
         pass
 
+
 async def rate_limit_auth(request: Request):
     """Rate limit for auth endpoints: 10/minute"""
     try:
-        key = await get_rate_limit_key(request)
+        key = await get_rate_limit_key_dependency(request)
         allowed, remaining, reset_time = check_rate_limit(key, 10, 60)
         if not allowed:
             raise RateLimitExceeded(f"Rate limit exceeded. Try again in {reset_time} seconds")
@@ -535,6 +785,7 @@ async def rate_limit_auth(request: Request):
         raise
     except Exception:
         pass
+
 
 # Export rate limit functions (to be used with Depends() in routes)
 RateLimitDefault = rate_limit_default

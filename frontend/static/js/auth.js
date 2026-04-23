@@ -1,11 +1,16 @@
 "use strict";
 /**
- * Authentication System for Quant Terminal
- * Handles login, register, and session management
+ * Authentication System for Quant Terminal - Supabase Edition v2
+ * Uses Supabase Auth exclusively - no SQLite fallback
+ * Updated: 2026-04-22
  */
+
+console.log('[AUTH] Loading Supabase Auth module v2');
 
 const AUTH_CONFIG = {
     STORAGE_KEY: 'quant_terminal_user',
+    TOKEN_KEY: 'access_token',
+    REFRESH_KEY: 'refresh_token',
     SESSION_DURATION: 24 * 60 * 60 * 1000, // 24 hours
 };
 
@@ -103,47 +108,121 @@ async function handleLogin(e) {
     setLoading(true, 'login-form');
     
     try {
-        // Call real backend API
+        // Call backend API which uses Supabase Auth
+        const requestBody = {
+            email: email,
+            password: password
+        };
+        console.log('Login request:', requestBody);
+        
         const response = await fetch('/api/auth/login', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                username: email,
-                password: password
-            })
+            body: JSON.stringify(requestBody)
         });
 
+        console.log('Login response status:', response.status);
+        
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || 'Login failed');
+            const errorText = await response.text();
+            console.error('Login error response:', errorText);
+            let errorMessage = 'Login failed';
+            try {
+                const errorData = JSON.parse(errorText);
+                // Handle different error formats
+                if (errorData.detail) {
+                    if (typeof errorData.detail === 'string') {
+                        errorMessage = errorData.detail;
+                    } else if (Array.isArray(errorData.detail)) {
+                        // Validation errors array
+                        errorMessage = errorData.detail.map(e => e.msg || e.message || JSON.stringify(e)).join(', ');
+                    } else {
+                        errorMessage = JSON.stringify(errorData.detail);
+                    }
+                } else if (errorData.message) {
+                    errorMessage = errorData.message;
+                } else {
+                    errorMessage = JSON.stringify(errorData);
+                }
+            } catch(e) {
+                errorMessage = errorText || 'Login failed';
+            }
+            throw new Error(errorMessage);
         }
 
         const data = await response.json();
 
-        // Create user object with token
+        // Create user object with Supabase tokens
         const user = {
-            email,
-            name: email.split('@')[0],
+            id: data.user.id,
+            email: data.user.email,
+            name: data.user.full_name || email.split('@')[0],
             loginTime: Date.now(),
             rememberMe,
             access_token: data.access_token,
-            token_type: data.token_type || 'bearer'
+            refresh_token: data.refresh_token,
+            token_type: data.token_type || 'bearer',
+            expires_in: data.expires_in
         };
         
         // Store session
         storeSession(user, rememberMe);
         
-        // Store token for API requests
-        localStorage.setItem('access_token', data.access_token);
+        // Store tokens for API requests
+        localStorage.setItem(AUTH_CONFIG.TOKEN_KEY, data.access_token);
+        localStorage.setItem(AUTH_CONFIG.REFRESH_KEY, data.refresh_token);
 
         showToast('Login successful! Redirecting...', 'success');
         
-        // Redirect to setup page for onboarding
-        setTimeout(() => {
-            window.location.href = '/setup.html';
-        }, 1000);
+        // Check if user has already completed setup (localStorage flag for quick check)
+        const setupCompleted = localStorage.getItem('portfolio_setup_completed');
+        if (setupCompleted === 'true') {
+            console.log('[AUTH] Setup already completed (localStorage), going to dashboard');
+            setTimeout(() => {
+                window.location.href = '/dashboard.html';
+            }, 1000);
+            return;
+        }
+        
+        // Check if user needs portfolio setup (only for first-time users)
+        try {
+            const setupCheck = await fetch('/api/portfolio/setup', {
+                headers: { 'Authorization': `Bearer ${data.access_token}` }
+            });
+            
+            if (setupCheck.ok) {
+                const setupData = await setupCheck.json();
+                console.log('[AUTH] Setup check response:', setupData);
+                
+                // IMPORTANT: Only check setup_complete flag, NOT cash_balance
+                // New users get default cash of 10L but setup_complete is false until they explicitly set up
+                setTimeout(() => {
+                    if (setupData.setup_complete === true) {
+                        console.log('[AUTH] User has completed setup, going to dashboard');
+                        // Mark as completed in localStorage to prevent future setup redirects
+                        localStorage.setItem('portfolio_setup_completed', 'true');
+                        window.location.href = '/dashboard.html';
+                    } else {
+                        console.log('[AUTH] New user needs setup, redirecting to setup page');
+                        window.location.href = '/setup.html';
+                    }
+                }, 1000);
+            } else {
+                // If API fails, assume new user and go to setup
+                console.log('[AUTH] Setup check failed, assuming new user - going to setup');
+                setTimeout(() => {
+                    window.location.href = '/setup.html';
+                }, 1000);
+            }
+        } catch (e) {
+            // On error, assume new user and go to setup
+            console.log('[AUTH] Setup check error, assuming new user:', e);
+            setTimeout(() => {
+                window.location.href = '/setup.html';
+            }, 1000);
+        }
         
     } catch (error) {
         console.error('Login error:', error);
@@ -194,14 +273,13 @@ async function handleRegister(e) {
     setLoading(true, 'register-form');
 
     try {
-        // Call backend API to register
+        // Call backend API to register with Supabase Auth
         const response = await fetch('/api/auth/register', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                username: email,
                 email: email,
                 password: password,
                 full_name: name
@@ -209,8 +287,28 @@ async function handleRegister(e) {
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || 'Registration failed');
+            const errorText = await response.text();
+            console.error('Register error response:', errorText);
+            let errorMessage = 'Registration failed';
+            try {
+                const errorData = JSON.parse(errorText);
+                if (errorData.detail) {
+                    if (typeof errorData.detail === 'string') {
+                        errorMessage = errorData.detail;
+                    } else if (Array.isArray(errorData.detail)) {
+                        errorMessage = errorData.detail.map(e => e.msg || e.message || JSON.stringify(e)).join(', ');
+                    } else {
+                        errorMessage = JSON.stringify(errorData.detail);
+                    }
+                } else if (errorData.message) {
+                    errorMessage = errorData.message;
+                } else {
+                    errorMessage = JSON.stringify(errorData);
+                }
+            } catch(e) {
+                errorMessage = errorText || 'Registration failed';
+            }
+            throw new Error(errorMessage);
         }
 
         const userData = await response.json();
@@ -225,7 +323,7 @@ async function handleRegister(e) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                username: email,
+                email: email,
                 password: password
             })
         });
@@ -242,22 +340,25 @@ async function handleRegister(e) {
 
         const loginData = await loginResponse.json();
 
-        // Create user object with token
+        // Create user object with Supabase tokens
         const user = {
-            email,
-            name: userData.full_name || name,
+            id: loginData.user.id,
+            email: loginData.user.email,
+            name: loginData.user.full_name || name,
             loginTime: Date.now(),
             rememberMe: false,
             access_token: loginData.access_token,
+            refresh_token: loginData.refresh_token,
             token_type: loginData.token_type || 'bearer',
-            user_id: userData.id
+            expires_in: loginData.expires_in
         };
 
         // Store session
         storeSession(user, false);
 
-        // Store token for API requests
-        localStorage.setItem('access_token', loginData.access_token);
+        // Store tokens for API requests
+        localStorage.setItem(AUTH_CONFIG.TOKEN_KEY, loginData.access_token);
+        localStorage.setItem(AUTH_CONFIG.REFRESH_KEY, loginData.refresh_token);
 
         // Redirect to setup page for onboarding
         setTimeout(() => {
@@ -277,15 +378,6 @@ async function handleRegister(e) {
  */
 function validateEmail(email) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-/**
- * Simulate authentication API call
- */
-function simulateAuthAPI() {
-    return new Promise((resolve) => {
-        setTimeout(resolve, 1500); // Simulate network delay
-    });
 }
 
 /**
@@ -330,17 +422,17 @@ function checkExistingSession() {
 
             currentUser = parsed.user;
 
-            // Restore access token from user object or localStorage
+            // Restore tokens from user object or localStorage
             if (currentUser && currentUser.access_token) {
-                localStorage.setItem('access_token', currentUser.access_token);
+                localStorage.setItem(AUTH_CONFIG.TOKEN_KEY, currentUser.access_token);
+            }
+            if (currentUser && currentUser.refresh_token) {
+                localStorage.setItem(AUTH_CONFIG.REFRESH_KEY, currentUser.refresh_token);
             }
 
-            // If user is already logged in and on auth page, redirect to appropriate page
+            // If user is already logged in and on auth page, check setup status first
             if (window.location.pathname.includes('auth.html')) {
-                // Check if there's a redirect destination stored
-                const redirectTo = sessionStorage.getItem('auth_redirect') || '/analysis.html';
-                sessionStorage.removeItem('auth_redirect');
-                window.location.href = redirectTo;
+                checkSetupAndRedirect();
             }
         } catch (e) {
             console.error('Session parsing error:', e);
@@ -360,7 +452,7 @@ function getCurrentUser() {
  * Check if user is authenticated
  */
 function isAuthenticated() {
-    return currentUser !== null;
+    return currentUser !== null && localStorage.getItem(AUTH_CONFIG.TOKEN_KEY) !== null;
 }
 
 /**
@@ -368,14 +460,80 @@ function isAuthenticated() {
  */
 function clearSession() {
     localStorage.removeItem(AUTH_CONFIG.STORAGE_KEY);
+    localStorage.removeItem(AUTH_CONFIG.TOKEN_KEY);
+    localStorage.removeItem(AUTH_CONFIG.REFRESH_KEY);
+    localStorage.removeItem('portfolio_setup_completed');
+    localStorage.removeItem('user_portfolio_setup');
+    localStorage.removeItem('user_risk_tolerance');
+    localStorage.removeItem('user_preferred_strategy');
     sessionStorage.removeItem(AUTH_CONFIG.STORAGE_KEY);
     currentUser = null;
 }
 
 /**
+ * Check portfolio setup status and redirect accordingly
+ * Only redirects to setup if user hasn't completed portfolio setup
+ */
+async function checkSetupAndRedirect() {
+    const token = localStorage.getItem(AUTH_CONFIG.TOKEN_KEY);
+    if (!token) {
+        // No token, stay on auth page
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/portfolio/setup', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            
+            // Check if there's a stored redirect
+            const storedRedirect = sessionStorage.getItem('auth_redirect');
+            if (storedRedirect) {
+                sessionStorage.removeItem('auth_redirect');
+                window.location.href = storedRedirect;
+                return;
+            }
+            
+            // Only check setup_complete flag - new users get default cash but setup_complete is false
+            if (data.setup_complete === true) {
+                window.location.href = '/dashboard.html';
+            } else {
+                window.location.href = '/setup.html';
+            }
+        } else {
+            // API error, assume new user and go to setup
+            window.location.href = '/setup.html';
+        }
+    } catch (error) {
+        console.error('Error checking setup status:', error);
+        // On error, assume new user and go to setup
+        window.location.href = '/setup.html';
+    }
+}
+
+/**
  * Logout user
  */
-function logout() {
+async function logout() {
+    try {
+        // Call backend logout endpoint
+        const token = localStorage.getItem(AUTH_CONFIG.TOKEN_KEY);
+        if (token) {
+            await fetch('/api/auth/logout', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+        }
+    } catch (e) {
+        console.warn('Logout API call failed:', e);
+    }
+    
     clearSession();
     showToast('Logged out successfully', 'success');
     setTimeout(() => {
@@ -442,7 +600,7 @@ function requireAuth() {
  * Automatically adds Authorization header if token is available
  */
 async function authenticatedFetch(url, options = {}) {
-    const token = localStorage.getItem('access_token');
+    const token = localStorage.getItem(AUTH_CONFIG.TOKEN_KEY);
 
     const defaultOptions = {
         headers: {
@@ -465,7 +623,35 @@ async function authenticatedFetch(url, options = {}) {
 
         // Handle 401 Unauthorized - token expired or invalid
         if (response.status === 401) {
-            console.warn('Authentication expired. Redirecting to login...');
+            console.warn('Authentication expired. Attempting refresh...');
+            
+            // Try to refresh token
+            const refreshToken = localStorage.getItem(AUTH_CONFIG.REFRESH_KEY);
+            if (refreshToken) {
+                try {
+                    const refreshResponse = await fetch('/api/auth/refresh', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ refresh_token: refreshToken })
+                    });
+                    
+                    if (refreshResponse.ok) {
+                        const refreshData = await refreshResponse.json();
+                        localStorage.setItem(AUTH_CONFIG.TOKEN_KEY, refreshData.access_token);
+                        localStorage.setItem(AUTH_CONFIG.REFRESH_KEY, refreshData.refresh_token);
+                        
+                        // Retry the original request with new token
+                        mergedOptions.headers['Authorization'] = `Bearer ${refreshData.access_token}`;
+                        return await fetch(url, mergedOptions);
+                    }
+                } catch (refreshError) {
+                    console.error('Token refresh failed:', refreshError);
+                }
+            }
+            
+            // If refresh failed, redirect to login
             clearSession();
             sessionStorage.setItem('auth_redirect', window.location.pathname);
             window.location.href = '/auth.html';

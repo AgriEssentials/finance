@@ -3,119 +3,400 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Stock Analysis Assistant</title>
+    <title>Quant Terminal v2 | AI-Powered Indian Stock Analysis</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/pro-theme.css">
+    <link rel="stylesheet" href="/static/css/dynamic-v2.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
+    <!-- Dynamic Alert Banner (injected by dynamic_ui.js) -->
+    <div id="dynamic-alert-banner" class="alert-banner" style="display: none;"></div>
+    
+    <!-- Risk Off Warning Banner -->
+    <div id="risk-off-warning" class="risk-off-banner" style="display: none;"></div>
+
     <div class="container">
         <header class="header">
             <div class="logo">
                 <div class="logo-icon">AI</div>
                 <div class="logo-text">
-                    <h1>AI Stock Analysis Assistant</h1>
-                    <p>AI-powered analysis for Indian markets</p>
+                    <h1>AI Quant Terminal</h1>
+                    <p>v2.0 Dynamic Intelligence</p>
                 </div>
-                <span class="status-dot">●</span>
+                <span class="status-dot" id="system-status-dot">●</span>
             </div>
             <div class="header-actions">
-                <a href="/auth.html" class="nav-chip">Login</a>
-                <a href="/data-sources.html" class="data-sources-link">Data Sources</a>
+                <!-- Market Regime Indicator -->
+                <div class="regime-indicator" id="market-regime-badge" style="margin-right: 15px;">
+                    <span class="regime-dot"></span>
+                    <span class="regime-text">Analyzing...</span>
+                </div>
+                <a href="/auth.html" class="nav-chip" id="auth-link">Login</a>
+                <a href="/dashboard.html" class="nav-chip" id="dashboard-link" style="display: none;">Dashboard</a>
+                <a href="/analysis.html" class="nav-chip" id="analysis-link" style="display: none;">Analysis</a>
+                <a href="/audit-trail.html" class="nav-chip" id="veritas-link" style="display: none;">Veritas</a>
             </div>
         </header>
 
         <div class="disclaimer-banner">
             <span>⚠</span>
-            <span><strong>Disclaimer:</strong> This tool is for educational purposes only and does not constitute financial advice. Stock market investments are subject to market risks. Please consult a SEBI registered financial advisor before making investment decisions.</span>
+            <span><strong>Disclaimer:</strong> This tool is for educational purposes only. Investments carry market risks. Consult a SEBI-registered advisor.</span>
         </div>
 
+        <!-- Dynamic Market Narrative Ticker -->
+        <div id="market-narrative-ticker" class="narrative-ticker"></div>
+
         <section id="home-view" class="home-view">
+            <!-- Shadow Market Correlation Panel (v2 Feature) -->
+            <div id="shadow-market-panel" class="dashboard-panel shadow-panel box-glow" style="display: none;">
+                <div class="panel-header">
+                    <h3><span class="shadow-icon">🔮</span> SHADOW MARKET</h3>
+                    <span class="tech-subtext">Invisible Strings</span>
+                    <button class="panel-toggle" onclick="togglePanel('shadow-market-content')">−</button>
+                </div>
+                <div id="shadow-market-content" class="panel-content">
+                    <div class="shadow-stats" id="shadow-stats"></div>
+                    <div class="invisible-strings" id="invisible-strings"></div>
+                    <div class="macro-drivers" id="macro-drivers"></div>
+                </div>
+            </div>
+
             <div class="terminal-dashboard-grid">
-                <!-- Top Row: Main Chart + Heatmap + System -->
+                <!-- Main Chart + System Status -->
                 <div class="dashboard-panel main-chart-panel box-glow">
                     <div class="panel-header">
                         <h3><span class="status-dot"></span> LIVE MARKET PULSE</h3>
                         <div class="panel-actions">
-                            <span class="badge badge-outline">NIFTY</span>
-                            <span class="badge badge-outline">SENSEX</span>
+                            <span class="badge badge-outline" id="nifty-badge">NIFTY</span>
+                            <span class="badge badge-outline" id="sensex-badge">SENSEX</span>
+                            <span class="badge badge-warning" id="vix-badge">VIX</span>
                         </div>
                     </div>
                     <div class="chart-container custom-chart-height"><canvas id="main-chart"></canvas></div>
                 </div>
 
+                <!-- Sector Heatmap -->
                 <div class="dashboard-panel heatmap-panel box-glow">
                     <div class="panel-header">
-                        <h3>SECTOR ALGORITHMIC HEATMAP</h3>
-                        <span class="tech-subtext">DYNAMIC WEIGHTING</span>
+                        <h3>SECTOR HEATMAP</h3>
+                        <span class="tech-subtext" id="heatmap-context">Loading...</span>
                     </div>
                     <div id="sector-heatmap" class="sector-heatmap dense-heatmap"></div>
                 </div>
 
+                <!-- System Control + Portfolio Risk Meter -->
                 <div class="dashboard-panel sys-panel box-glow">
                     <div class="panel-header">
-                        <h3>TERMINAL CONTROL</h3>
+                        <h3>TERMINAL STATUS</h3>
                     </div>
                     <div class="hero-panels vertical-panels" id="hero-market-panels">
-                        <div class="hero-panel neutral"><span>Engine Status</span><strong id="hero-system-status">Loading...</strong></div>
-                        <div class="hero-panel neutral"><span>Data Streams</span><strong id="hero-api-status">Checking...</strong></div>
-                        <div class="hero-panel neutral"><span>Neural Nets</span><strong id="hero-ml-status">Initializing...</strong></div>
+                        <div class="hero-panel neutral" id="system-status-panel">
+                            <span>Engine Status</span>
+                            <strong id="hero-system-status">Initializing...</strong>
+                        </div>
+                        <div class="hero-panel neutral" id="api-status-panel">
+                            <span>Data Streams</span>
+                            <strong id="hero-api-status">Connecting...</strong>
+                        </div>
+                        <div class="hero-panel neutral" id="ml-status-panel">
+                            <span>Neural Nets</span>
+                            <strong id="hero-ml-status">Loading...</strong>
+                        </div>
                     </div>
                     
-                    <a href="/auth.html" id="enter-terminal-btn" class="btn-primary terminal-launch-btn">
-                        INITIALIZE QUANT ANALYSIS <span class="blink">_</span>
+                    <!-- Portfolio Risk Meter (v2) -->
+                    <div id="portfolio-risk-meter" class="risk-meter" style="display: none;">
+                        <div class="risk-label">
+                            <span>Portfolio Risk</span>
+                            <span id="risk-value">Moderate</span>
+                        </div>
+                        <div class="risk-bar">
+                            <div class="risk-fill" id="risk-fill" style="width: 50%"></div>
+                        </div>
+                        <div class="risk-beta">
+                            <span>Shadow Beta: <strong id="shadow-beta-value">1.00</strong></span>
+                        </div>
+                    </div>
+                    
+                    <a href="/analysis.html" id="enter-terminal-btn" class="btn-primary terminal-launch-btn">
+                        LAUNCH ANALYSIS TERMINAL <span class="blink">_</span>
                     </a>
                 </div>
 
-                <!-- Bottom Row: Sparklines + Order book + Logs -->
+                <!-- Sparklines -->
                 <div class="dashboard-panel sparklines-panel box-glow">
                     <div class="panel-header">
-                        <h3>MOMENTUM SCANS (L1)</h3>
+                        <h3>MOMENTUM SCANS</h3>
+                        <span class="badge badge-success" id="spark-refresh-badge">LIVE</span>
                     </div>
                     <div id="sparkline-grid" class="sparkline-grid dense-sparks"></div>
                 </div>
 
-                <div class="dashboard-panel orderbook-panel box-glow">
+                <!-- Enhanced Newswire with NSE Announcements -->
+                <div class="dashboard-panel newswire-panel box-glow">
                     <div class="panel-header">
-                        <h3>L2 ORDER DEPTH</h3>
+                        <h3>INTELLIGENCE FEED</h3>
+                        <div class="feed-tabs">
+                            <button class="feed-tab active" data-tab="news">News</button>
+                            <button class="feed-tab" data-tab="announcements">NSE Updates</button>
+                            <button class="feed-tab" data-tab="alerts">Alerts</button>
+                        </div>
                     </div>
-                    <div id="order-book" class="order-book dense-ob"></div>
+                    <div id="market-newswire" class="newswire-feed dense-feed active-tab" data-content="news"></div>
+                    <div id="nse-announcements" class="newswire-feed dense-feed" data-content="announcements" style="display: none;"></div>
+                    <div id="system-alerts" class="newswire-feed dense-feed" data-content="alerts" style="display: none;"></div>
                 </div>
 
+                <!-- System Log + Active Signals -->
                 <div class="dashboard-panel log-panel box-glow">
                     <div class="panel-header">
-                        <h3>SYSTEM LOG STREAM</h3>
+                        <h3>SYSTEM LOG</h3>
+                        <span class="tech-subtext" id="log-status">Streaming</span>
                     </div>
                     <div id="log-stream" class="log-stream terminal-font"></div>
                 </div>
             </div>
             
+            <!-- Bottom Ticker -->
             <div class="market-ticker" id="market-ticker" style="margin-top: 16px;">
-                <div class="ticker-item"><span>NIFTY 50</span><strong>--</strong></div>
-                <div class="ticker-item"><span>SENSEX</span><strong>--</strong></div>
-                <div class="ticker-item"><span>BANKNIFTY</span><strong>--</strong></div>
-                <div class="ticker-item"><span>INDIA VIX</span><strong>--</strong></div>
-                <div class="ticker-item"><span>Top Mover</span><strong>--</strong></div>
+                <div class="ticker-item"><span>NIFTY 50</span><strong id="ticker-nifty">--</strong></div>
+                <div class="ticker-item"><span>SENSEX</span><strong id="ticker-sensex">--</strong></div>
+                <div class="ticker-item"><span>BANKNIFTY</span><strong id="ticker-banknifty">--</strong></div>
+                <div class="ticker-item"><span>INDIA VIX</span><strong id="ticker-vix">--</strong></div>
+                <div class="ticker-item"><span>DXY</span><strong id="ticker-dxy">--</strong></div>
+                <div class="ticker-item"><span>Brent Oil</span><strong id="ticker-oil">--</strong></div>
             </div>
+        </section>
+
+        <!-- Active Signals Panel (v2) -->
+        <section id="active-signals-panel" class="signals-panel" style="display: none;">
+            <div class="panel-header">
+                <h3>Active Signals</h3>
+                <button class="clear-signals" onclick="clearAllSignals()">Clear All</button>
+            </div>
+            <div id="signals-list" class="signals-list"></div>
         </section>
     </div>
 
-    <div id="symbols-modal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Popular Symbols</h3>
-                <button class="modal-close">&times;</button>
-            </div>
-            <div class="modal-tabs">
-                <button class="tab-btn active" data-tab="nse">NSE</button>
-                <button class="tab-btn" data-tab="bse">BSE</button>
-            </div>
-            <div class="symbols-list" id="symbols-list"></div>
-        </div>
-    </div>
+    <!-- Toast Notifications Container -->
+    <div id="toast-container" class="toast-container"></div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script src="/static/js/app.js"></script>
+    <!-- Scripts -->
+    <script src="/static/js/auth.js?v=10"></script>
+    <script src="/static/js/app.js?v=13"></script>
+    <script src="/static/js/dynamic_ui.js?v=5"></script>
+    <script>
+        // v2 Feature: Tab switching for newswire
+        document.querySelectorAll('.feed-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                // Update active tab
+                document.querySelectorAll('.feed-tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Show corresponding content
+                const tabName = this.dataset.tab;
+                document.querySelectorAll('[data-content]').forEach(content => {
+                    content.style.display = content.dataset.content === tabName ? 'block' : 'none';
+                });
+            });
+        });
+
+        // v2 Feature: Panel toggle
+        function togglePanel(contentId) {
+            const content = document.getElementById(contentId);
+            if (content) {
+                content.style.display = content.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+
+        // v2 Feature: Check auth and load appropriate view
+        async function initializeV2() {
+            const token = localStorage.getItem('access_token');
+            const authLink = document.getElementById('auth-link');
+            const dashboardLink = document.getElementById('dashboard-link');
+            const veritasLink = document.getElementById('veritas-link');
+            const shadowPanel = document.getElementById('shadow-market-panel');
+            const riskMeter = document.getElementById('portfolio-risk-meter');
+            
+            if (token) {
+                // User is logged in - show v2 features
+                if (authLink) authLink.style.display = 'none';
+                if (dashboardLink) dashboardLink.style.display = 'inline-block';
+                const analysisLink = document.getElementById('analysis-link');
+                if (analysisLink) analysisLink.style.display = 'inline-block';
+                if (veritasLink) veritasLink.style.display = 'inline-block';
+                if (shadowPanel) shadowPanel.style.display = 'block';
+                if (riskMeter) riskMeter.style.display = 'block';
+                
+                // Load shadow market data
+                loadShadowMarketData();
+                
+                // Load NSE announcements
+                loadNSEAnnouncements();
+            } else {
+                // Guest view - limited features
+                if (authLink) authLink.textContent = 'Login for Full Access';
+            }
+        }
+
+        // v2 Feature: Load Shadow Market Data
+        async function loadShadowMarketData() {
+            try {
+                const token = localStorage.getItem('access_token');
+                const response = await fetch('/api/v2/shadow-market', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load shadow market');
+                
+                const data = await response.json();
+                
+                // Update shadow stats
+                if (data.shadow_beta !== undefined) {
+                    document.getElementById('shadow-beta-value').textContent = data.shadow_beta.toFixed(2);
+                    
+                    // Color code beta
+                    const betaEl = document.getElementById('shadow-beta-value');
+                    if (data.shadow_beta > 1.5) {
+                        betaEl.style.color = '#ff6b6b';
+                    } else if (data.shadow_beta < 0.8) {
+                        betaEl.style.color = '#00ff9d';
+                    }
+                }
+                
+                // Render invisible strings
+                if (data.invisible_strings && data.invisible_strings.length > 0) {
+                    const stringsContainer = document.getElementById('invisible-strings');
+                    stringsContainer.innerHTML = data.invisible_strings.slice(0, 5).map(s => `
+                        <div class="invisible-string ${s.direction}">
+                            <span class="string-from">${s.from_driver.toUpperCase()}</span>
+                            <span class="string-connector">
+                                <span class="string-line"></span>
+                                <span class="string-strength">${(s.strength * 100).toFixed(0)}%</span>
+                            </span>
+                            <span class="string-to">${s.to_symbol.replace('.NS', '')}</span>
+                        </div>
+                    `).join('');
+                }
+                
+                // Render macro drivers
+                if (data.macro_states) {
+                    const macroContainer = document.getElementById('macro-drivers');
+                    macroContainer.innerHTML = Object.entries(data.macro_states).slice(0, 4).map(([driver, state]) => `
+                        <div class="macro-driver">
+                            <span class="driver-name">${driver.toUpperCase()}</span>
+                            <span class="driver-value ${state.change_1h_pct > 0 ? 'positive' : state.change_1h_pct < 0 ? 'negative' : ''}">
+                                ${state.current_value.toFixed(2)} 
+                                (${state.change_1h_pct > 0 ? '+' : ''}${state.change_1h_pct.toFixed(1)}%)
+                            </span>
+                        </div>
+                    `).join('');
+                    
+                    // Update ticker
+                    if (data.macro_states.dxy) {
+                        document.getElementById('ticker-dxy').textContent = 
+                            data.macro_states.dxy.current_value.toFixed(2);
+                    }
+                    if (data.macro_states.brent_oil) {
+                        document.getElementById('ticker-oil').textContent = 
+                            data.macro_states.brent_oil.current_value.toFixed(2);
+                    }
+                }
+                
+                // Update risk meter
+                if (data.diversification_score !== undefined) {
+                    const riskFill = document.getElementById('risk-fill');
+                    const riskValue = document.getElementById('risk-value');
+                    
+                    // Invert - high diversification = low risk
+                    const riskLevel = 100 - data.diversification_score;
+                    riskFill.style.width = `${riskLevel}%`;
+                    
+                    if (riskLevel > 70) {
+                        riskFill.style.background = 'linear-gradient(90deg, #ff6b6b, #ff2d2d)';
+                        riskValue.textContent = 'High';
+                    } else if (riskLevel > 40) {
+                        riskFill.style.background = 'linear-gradient(90deg, #ffb84d, #ff9500)';
+                        riskValue.textContent = 'Moderate';
+                    } else {
+                        riskFill.style.background = 'linear-gradient(90deg, #00ff9d, #00b36b)';
+                        riskValue.textContent = 'Low';
+                    }
+                }
+                
+            } catch (error) {
+                console.error('[v2] Error loading shadow market:', error);
+            }
+        }
+
+        // v2 Feature: Load NSE Announcements
+        async function loadNSEAnnouncements() {
+            try {
+                const token = localStorage.getItem('access_token');
+                const response = await fetch('/api/v2/nse-announcements', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load announcements');
+                
+                const data = await response.json();
+                const container = document.getElementById('nse-announcements');
+                
+                if (data.announcements && data.announcements.length > 0) {
+                    container.innerHTML = data.announcements.slice(0, 10).map(ann => {
+                        const hasImpact = ann.user_impact !== null;
+                        return `
+                            <div class="announcement-item ${hasImpact ? 'has-impact' : ''}">
+                                <div class="announcement-header">
+                                    <span class="ann-symbol">${ann.announcement.symbol}</span>
+                                    <span class="ann-type">${ann.announcement.type}</span>
+                                    <span class="ann-impact ${ann.announcement.impact_level}">${ann.announcement.impact_level}</span>
+                                </div>
+                                <div class="ann-subject">${ann.announcement.subject}</div>
+                                ${ann.announcement.flash_analysis ? `
+                                    <div class="ann-analysis">${ann.announcement.flash_analysis.substring(0, 100)}...</div>
+                                ` : ''}
+                                ${hasImpact ? `
+                                    <div class="ann-user-impact">
+                                        <span class="impact-recommendation ${ann.user_impact.recommendation}">
+                                            ${ann.user_impact.recommendation.toUpperCase()}
+                                        </span>
+                                        <span class="impact-estimate">${ann.user_impact.estimated_impact_pct}% expected</span>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    container.innerHTML = '<div class="empty-feed">No new announcements</div>';
+                }
+                
+            } catch (error) {
+                console.error('[v2] Error loading announcements:', error);
+            }
+        }
+
+        // Initialize v2 on page load
+        document.addEventListener('DOMContentLoaded', initializeV2);
+
+        // v2: Auto-refresh shadow market every 60 seconds
+        setInterval(() => {
+            const token = localStorage.getItem('access_token');
+            if (token) {
+                loadShadowMarketData();
+                loadNSEAnnouncements();
+            }
+        }, 60000);
+        
+        // Clear redirect history on successful load (prevents stale loops)
+        setTimeout(() => {
+            localStorage.removeItem('redirect_history');
+            console.log('[INDEX] Cleared redirect history on successful load');
+        }, 5000);
+    </script>
 </body>
 </html>

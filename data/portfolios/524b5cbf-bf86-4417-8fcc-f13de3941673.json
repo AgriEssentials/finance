@@ -1,0 +1,30 @@
+{
+  "cash": 987859.8997802734,
+  "initial_capital": 1000000.0,
+  "is_setup": true,
+  "positions": [
+    {
+      "symbol": "RELIANCE.NS",
+      "shares": 9,
+      "avg_cost": 1348.9000244140625,
+      "current_price": 1351.0,
+      "current_value": 12159.0,
+      "unrealized_pnl": 18.8997802734375,
+      "unrealized_pnl_percent": 0.15568059514638166,
+      "sector": "Energy",
+      "last_updated": "2026-04-23T13:50:05.020773"
+    }
+  ],
+  "transactions": [
+    {
+      "symbol": "RELIANCE.NS",
+      "action": "buy",
+      "shares": 9,
+      "price": 1348.9000244140625,
+      "date": "2026-04-23T07:13:59.398114",
+      "fees": 0.0,
+      "total_amount": 12140.100219726562
+    }
+  ],
+  "last_saved": "2026-04-23T13:50:05.022025"
+}

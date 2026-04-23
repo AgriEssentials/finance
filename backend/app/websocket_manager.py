@@ -28,7 +28,7 @@ class ConnectionManager:
         # Connection metadata: websocket -> {user_id, subscribed_symbols}
         self.connection_metadata: Dict[WebSocket, Dict] = {}
         
-    async def connect(self, websocket: WebSocket, user_id: Optional[int] = None):
+    async def connect(self, websocket: WebSocket, user_id: Optional[str] = None):
         """Accept new WebSocket connection"""
         await websocket.accept()
         
@@ -344,7 +344,7 @@ async def handle_websocket_message(websocket: WebSocket, message: Dict):
         })
 
 # WebSocket endpoint handler
-async def websocket_endpoint_handler(websocket: WebSocket, user_id: Optional[int] = None):
+async def websocket_endpoint_handler(websocket: WebSocket, user_id: Optional[str] = None):
     """Main WebSocket connection handler"""
     await manager.connect(websocket, user_id)
     

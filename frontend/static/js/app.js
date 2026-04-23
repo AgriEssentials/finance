@@ -23,7 +23,7 @@ let landingMainChart = null;
 let landingSparklineCharts = [];
 let landingRefreshInterval = null;
 // DOM Elements - Initialize with null safety
-const elements = {
+const appElements = {
     symbolInput: document.getElementById('symbol') || null,
     portfolioInput: document.getElementById('portfolio-value') || null,
     analyzeBtn: document.getElementById('analyze-btn') || null,
@@ -42,41 +42,53 @@ const elements = {
     analysisNavBtn: document.getElementById('analysis-nav-btn') || null
 };
 function setActiveNav(view) {
-    if (elements.homeNavBtn) {
-        elements.homeNavBtn.classList.toggle('active', view === 'home');
+    if (appElements.homeNavBtn) {
+        appElements.homeNavBtn.classList.toggle('active', view === 'home');
     }
-    if (elements.analysisNavBtn) {
-        elements.analysisNavBtn.classList.toggle('active', view === 'analysis');
+    if (appElements.analysisNavBtn) {
+        appElements.analysisNavBtn.classList.toggle('active', view === 'analysis');
     }
 }
 
-// Debug: Log missing elements on startup
+// Debug: Log missing elements on startup (only warn for critical elements on current page)
 function debugLogMissingElements() {
+    const isAnalysisPage = document.getElementById('analysis-shell') !== null;
+    const isHomePage = document.getElementById('home-view') !== null;
+    
     const missing = [];
-    for (const [key, value] of Object.entries(elements)) {
+    for (const [key, value] of Object.entries(appElements)) {
         if (value === null || (Array.isArray(value) && value.length === 0)) {
-            missing.push(key);
+            // Only log as missing if it's critical for the current page
+            const isCriticalForHome = ['homeView', 'enterTerminalBtn'].includes(key);
+            const isCriticalForAnalysis = ['symbolInput', 'analyzeBtn'].includes(key);
+            
+            if ((isHomePage && isCriticalForHome) || (isAnalysisPage && isCriticalForAnalysis)) {
+                missing.push(key);
+            }
         }
     }
     if (missing.length > 0) {
-        console.warn('[DEBUG] Missing DOM elements:', missing);
+        console.warn('[DEBUG] Missing critical DOM elements for current page:', missing);
     } else {
-        console.log('[DEBUG] All DOM elements found');
+        console.log('[DEBUG] All critical DOM elements found for current page');
     }
 }
 function showHomeView() {
-    if (elements.homeView)
-        elements.homeView.style.display = 'block';
-    if (elements.analysisShell)
-        elements.analysisShell.style.display = 'none';
-    window.location.hash = '';
+    if (appElements.homeView)
+        appElements.homeView.style.display = 'block';
+    if (appElements.analysisShell)
+        appElements.analysisShell.style.display = 'none';
+    // Only change hash if different (prevents loop)
+    if (window.location.hash !== '') {
+        window.location.hash = '';
+    }
     setActiveNav('home');
 }
 function showAnalysisView() {
-    if (elements.homeView)
-        elements.homeView.style.display = 'none';
-    if (elements.analysisShell)
-        elements.analysisShell.style.display = 'block';
+    if (appElements.homeView)
+        appElements.homeView.style.display = 'none';
+    if (appElements.analysisShell)
+        appElements.analysisShell.style.display = 'block';
     window.location.hash = 'analysis';
     setActiveNav('analysis');
     populateLiveTickerBar();
@@ -138,7 +150,12 @@ function buildFallbackHeatmap() {
     const symbols = [
         'RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN',
         'ITC', 'LT', 'AXISBANK', 'KOTAKBANK', 'SUNPHARMA', 'MARUTI',
-        'TITAN', 'BAJFINANCE', 'HCLTECH', 'WIPRO', 'ONGC', 'M&M'
+        'TITAN', 'BAJFINANCE', 'HCLTECH', 'WIPRO', 'ONGC', 'M&M',
+        'ASIANPAINT', 'TATAMOTORS', 'TATASTEEL', 'NTPC', 'ULTRACEMCO',
+        'POWERGRID', 'JSWSTEEL', 'GRASIM', 'INDUSINDBK', 'ADANIENT',
+        'ADANIPORTS', 'BAJAJFINSV', 'HINDALCO', 'COALINDIA', 'BRITANNIA',
+        'TECHM', 'EICHERMOT', 'DRREDDY', 'DIVISLAB', 'APOLLOHOSP',
+        'CIPLA', 'TATAQ', 'HEROMOTOCO', 'HDFCLIFE'
     ];
     return symbols.map((symbol, index) => {
         const wave = Math.sin((Date.now() / 60000) + index) * 1.9;
@@ -183,12 +200,44 @@ function ensureLandingDataShape(data) {
     const indices = Array.isArray(safeData.indices) ? safeData.indices : [];
     return { ...safeData, indices, heatmap };
 }
-function renderLandingHeatmap(stocks) {
+function renderLandingHeatmap(stocks, portfolioSummary = null) {
     const container = document.getElementById('sector-heatmap');
     if (!container)
         return;
+    
+    // Check if user is logged in and has no portfolio set up
+    const token = localStorage.getItem('access_token');
+    const isAuthenticated = token !== null;
+    const hasPortfolio = portfolioSummary && portfolioSummary.is_setup;
+    
+    // If logged in but no portfolio, show setup message
+    if (isAuthenticated && !hasPortfolio) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.7);">
+                <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
+                <p style="margin-bottom: 20px;">You haven't set up your portfolio yet.</p>
+                <a href="/setup.html" style="display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #00d4ff, #7b2cbf); color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600;">
+                    Set Up Portfolio →
+                </a>
+            </div>
+        `;
+        return;
+    }
+    
+    // If logged in with portfolio, show personalized message
+    if (isAuthenticated && hasPortfolio && (!stocks || stocks.length === 0)) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.7);">
+                <div style="font-size: 48px; margin-bottom: 16px;">📈</div>
+                <p>Your portfolio is set up but you have no positions yet.</p>
+                <p style="margin-top: 10px; font-size: 0.9rem; color: rgba(255,255,255,0.5);">Start trading to see your stocks here!</p>
+            </div>
+        `;
+        return;
+    }
+    
     const safeStocks = (stocks && stocks.length > 0) ? stocks : buildFallbackHeatmap();
-    container.innerHTML = safeStocks.slice(0, 30).map(stock => {
+    container.innerHTML = safeStocks.slice(0, 50).map(stock => {
         const pct = Number(stock.change_pct || 0);
         const cls = pct > 1.0 ? 'heat-up-strong' : pct >= 0 ? 'heat-up' : pct < -1.0 ? 'heat-down-strong' : 'heat-down';
         const sign = pct >= 0 ? '+' : '';
@@ -250,7 +299,30 @@ function renderLandingMainChart(sparks) {
     const safeSparks = (sparks && sparks.length > 0) ? sparks : buildFallbackSparklines();
     const series = (safeSparks && safeSparks[0] && Array.isArray(safeSparks[0].prices)) ? safeSparks[0].prices : [];
     const labels = series.map((_, i) => i + 1);
-    landingMainChart = new Chart(canvas.getContext('2d'), {
+    
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.parentElement.clientHeight || 300);
+    gradient.addColorStop(0, 'rgba(56, 189, 248, 0.5)');
+    gradient.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+
+    const glowPlugin = {
+        id: 'glowPlugin',
+        beforeDatasetDraw: (chart, args) => {
+            if (args.meta.type === 'line') {
+                const ctx = chart.ctx;
+                ctx.save();
+                ctx.shadowColor = 'rgba(56, 189, 248, 0.6)';
+                ctx.shadowBlur = 15;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 5;
+            }
+        },
+        afterDatasetDraw: (chart) => {
+            chart.ctx.restore();
+        }
+    };
+
+    landingMainChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels,
@@ -258,27 +330,84 @@ function renderLandingMainChart(sparks) {
                     label: safeSparks && safeSparks[0] ? safeSparks[0].symbol : 'Index',
                     data: series,
                     borderColor: '#38bdf8',
-                    backgroundColor: 'rgba(56, 189, 248, 0.14)',
+                    backgroundColor: gradient,
+                    borderWidth: 3,
                     fill: true,
-                    tension: 0.22,
-                    pointRadius: 0
+                    tension: 0.4,
+                    cubicInterpolationMode: 'monotone',
+                    pointRadius: 0,
+                    pointHoverRadius: 5,
+                    pointBackgroundColor: '#38bdf8',
+                    pointBorderColor: '#fff',
                 }]
         },
         options: {
+            devicePixelRatio: Math.max(window.devicePixelRatio || 1, 2),
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            plugins: { 
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                    titleColor: '#f8fafc',
+                    bodyColor: '#e2e8f0',
+                    borderColor: '#334155',
+                    borderWidth: 1,
+                    padding: 10,
+                    displayColors: false,
+                    callbacks: {
+                        label: function(context) {
+                            return '₹ ' + context.parsed.y.toFixed(2);
+                        }
+                    }
+                }
+            },
             scales: {
-                x: { display: false },
-                y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,0.15)' } }
+                x: { 
+                    display: false,
+                    grid: { display: false }
+                },
+                y: { 
+                    position: 'right',
+                    ticks: { 
+                        color: '#64748b',
+                        font: { family: 'JetBrains Mono, monospace', size: 10 }
+                    }, 
+                    grid: { 
+                        color: 'rgba(51,65,85,0.2)',
+                        drawBorder: false,
+                        borderDash: [4, 4]
+                    } 
+                }
             }
-        }
+        },
+        plugins: [glowPlugin]
     });
 }
-function renderLandingSparklines(sparks) {
+function renderLandingSparklines(sparks, isPersonalized = false) {
     const grid = document.getElementById('sparkline-grid');
     if (!grid)
         return;
+    
+    // Check if this is personalized and empty (user has no portfolio)
+    const token = localStorage.getItem('access_token');
+    const isAuthenticated = token !== null;
+    
+    if (isPersonalized && isAuthenticated && (!sparks || sparks.length === 0)) {
+        // Show setup message for logged-in users without portfolio
+        grid.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 30px; background: rgba(255,255,255,0.05); border-radius: 12px;">
+                <p style="color: rgba(255,255,255,0.7); margin-bottom: 12px;">Your portfolio sparklines will appear here once you add stocks.</p>
+                <a href="/setup.html" style="display: inline-block; padding: 8px 16px; background: var(--primary); color: #fff; text-decoration: none; border-radius: 6px; font-size: 0.9rem;">Set Up Portfolio →</a>
+            </div>
+        `;
+        return;
+    }
+    
     const safeSparks = (sparks && sparks.length > 0) ? sparks : buildFallbackSparklines();
     grid.innerHTML = safeSparks.slice(0, 6).map((s, idx) => {
         const pct = Number(s.change_pct || 0);
@@ -304,77 +433,307 @@ function renderLandingSparklines(sparks) {
         if (!canvas)
             return;
         const pct = Number(s.change_pct || 0);
-        const color = pct >= 0 ? '#22c55e' : '#ef4444';
-        const chart = new Chart(canvas.getContext('2d'), {
+        const color = pct >= 0 ? '#10b981' : '#f43f5e'; // More vibrant colors
+        
+        const ctx = canvas.getContext('2d');
+        const gradient = ctx.createLinearGradient(0, 0, 0, canvas.parentElement.clientHeight || 50);
+        const rgbColor = pct >= 0 ? '16, 185, 129' : '244, 63, 94';
+        gradient.addColorStop(0, `rgba(${rgbColor}, 0.25)`);
+        gradient.addColorStop(1, `rgba(${rgbColor}, 0.0)`);
+        
+        const sparklineGlow = {
+            id: 'sparklineGlow',
+            beforeDatasetDraw: (chart) => {
+                const ctx = chart.ctx;
+                ctx.save();
+                ctx.shadowColor = `rgba(${rgbColor}, 0.5)`;
+                ctx.shadowBlur = 6;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 2;
+            },
+            afterDatasetDraw: (chart) => {
+                chart.ctx.restore();
+            }
+        };
+
+        const chart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: (s.prices || []).map((_, i) => i),
                 datasets: [{
                         data: s.prices || [],
                         borderColor: color,
+                        backgroundColor: gradient,
+                        fill: true,
                         pointRadius: 0,
-                        borderWidth: 1.7,
-                        tension: 0.2
+                        borderWidth: 2,
+                        tension: 0.4,
+                        cubicInterpolationMode: 'monotone'
                     }]
             },
             options: {
+                devicePixelRatio: Math.max(window.devicePixelRatio || 1, 2),
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: { legend: { display: false }, tooltip: { enabled: false } },
-                scales: { x: { display: false }, y: { display: false } }
-            }
+                scales: { 
+                    x: { display: false }, 
+                    y: { 
+                        display: false,
+                        min: Math.min(...(s.prices || [0])) * 0.998,
+                        max: Math.max(...(s.prices || [0])) * 1.002
+                    } 
+                },
+                layout: { padding: { top: 6, bottom: 6 } }
+            },
+            plugins: [sparklineGlow]
         });
         landingSparklineCharts.push(chart);
     });
 }
-async function loadLandingDashboard() {
+// Guard to prevent simultaneous executions
+let isLoadingLanding = false;
+let lastLandingLoad = 0;
+const MIN_LOAD_INTERVAL = 5000; // Minimum 5 seconds between loads
+
+async function loadLandingDashboard(forceRefresh = false) {
     if (!document.getElementById('home-view'))
         return;
+    
+    // CRITICAL: Prevent simultaneous loads (stops disco)
+    if (isLoadingLanding) {
+        console.log('[LANDING] Load already in progress, skipping');
+        return;
+    }
+    
+    // CRITICAL: Prevent rapid successive loads (stops disco)
+    const now = Date.now();
+    if (!forceRefresh && (now - lastLandingLoad) < MIN_LOAD_INTERVAL) {
+        console.log(`[LANDING] Load throttled (wait ${Math.ceil((MIN_LOAD_INTERVAL - (now - lastLandingLoad))/1000)}s)`);
+        return;
+    }
+    
+    isLoadingLanding = true;
+    lastLandingLoad = now;
+    
+    // Show loading state (only if forced)
+    if (forceRefresh) {
+        pushLandingLog('Syncing market data...', 'info');
+    }
+    
+    // Determine if user is logged in
+    const token = localStorage.getItem('access_token');
+    const isAuthenticated = token !== null;
+    
+    console.log(`[LANDING] Starting data fetch. Authenticated: ${isAuthenticated}`);
+    
     try {
-        const landingRes = await fetch(`${API_BASE_URL}/api/landing-data`);
-        if (landingRes.ok) {
-            const data = ensureLandingDataShape(await landingRes.json());
+        // Use personalized endpoint if logged in, otherwise public endpoint
+        const endpoint = isAuthenticated ? '/api/landing-data/personalized' : '/api/landing-data';
+        const cacheBuster = `t=${Date.now()}`;
+        const landingUrl = `${API_BASE_URL}${endpoint}?${forceRefresh ? 'force_refresh=true&' : ''}${cacheBuster}`;
+        
+        console.log(`[LANDING] Fetching from: ${endpoint}`);
+        
+        // Set up headers
+        const headers = {};
+        if (isAuthenticated && token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        
+        // Fetch with timeout and retry logic
+        let landingRes = null;
+        let retries = 0;
+        const maxRetries = 2;
+        
+        while (retries < maxRetries && !landingRes) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+                
+                landingRes = await fetch(landingUrl, { 
+                    signal: controller.signal,
+                    headers: {
+                        ...headers,
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache'
+                    },
+                    cache: 'no-store'
+                });
+                clearTimeout(timeoutId);
+            } catch (fetchError) {
+                retries++;
+                if (retries >= maxRetries) throw fetchError;
+                pushLandingLog(`Retry ${retries}/${maxRetries}...`, 'warn');
+                await new Promise(r => setTimeout(r, 1000));
+            }
+        }
+        
+        console.log(`[LANDING] Response status: ${landingRes?.status}, OK: ${landingRes?.ok}`);
+        
+        if (landingRes && landingRes.ok) {
+            const rawData = await landingRes.json();
+            console.log('[LANDING] Data received:', rawData);
+            const data = ensureLandingDataShape(rawData);
+            const isCached = data._cached === true;
+            const isStale = data._stale === true;
+            const cacheAge = data._cache_age || 0;
+            
+            console.log(`[LANDING] Rendering with ${data.indices?.length || 0} indices, ${data.heatmap?.length || 0} stocks`);
+    console.log(`[LANDING] Portfolio summary:`, data.portfolio_summary);
+    
+    // Debug: Log all heatmap stocks
+    if (data.heatmap && data.heatmap.length > 0) {
+        console.log(`[LANDING] Heatmap stocks (${data.heatmap.length}):`, data.heatmap.map(s => s.symbol).join(', '));
+    }
+            
             renderTicker('market-ticker', data.indices || []);
             renderTicker('live-ticker-bar', data.indices || []);
             renderLandingSystemPanels(data);
-            renderLandingHeatmap(data.heatmap || []);
+            renderLandingHeatmap(data.heatmap || [], data.portfolio_summary || null);
             renderOrderBookFromTop((data.heatmap || [])[0]);
-            pushLandingLog('Landing market data synced', 'success');
+            
+            // Determine message based on cache status
+            let msg, msgType;
+            if (isStale) {
+                msg = `Market data stale (${cacheAge}s old)`;
+                msgType = 'warn';
+            } else if (isCached) {
+                msg = `Market data synced (cache ${cacheAge}s)`;
+                msgType = 'info';
+            } else {
+                msg = 'Market data synced (live)';
+                msgType = 'success';
+            }
+            pushLandingLog(msg, msgType);
+            
+            // Update system status indicator
+            const systemStatus = document.getElementById('hero-system-status');
+            if (systemStatus && data.timestamp) {
+                const time = new Date(data.timestamp).toLocaleTimeString('en-IN', { hour12: false });
+                if (isStale) {
+                    systemStatus.textContent = `STALE (${time})`;
+                    systemStatus.className = 'negative';
+                } else if (isCached) {
+                    systemStatus.textContent = `CACHED (${time})`;
+                    systemStatus.className = 'neutral';
+                } else {
+                    systemStatus.textContent = `ONLINE (${time})`;
+                    systemStatus.className = 'positive';
+                }
+            }
         }
         else {
-            const fallback = ensureLandingDataShape(null);
-            renderLandingHeatmap(fallback.heatmap);
-            renderOrderBookFromTop(fallback.heatmap[0]);
-            pushLandingLog('Landing market data request failed', 'warn');
+            throw new Error('Landing data API error');
         }
-        const sparkRes = await fetch(`${API_BASE_URL}/api/sparklines`);
-        if (sparkRes.ok) {
+        
+        // Fetch sparklines with similar retry logic (use personalized endpoint if logged in)
+        const sparkEndpoint = isAuthenticated ? '/api/sparklines/personalized' : '/api/sparklines';
+        const sparkCacheBuster = `t=${Date.now()}`;
+        const sparkUrl = `${API_BASE_URL}${sparkEndpoint}?${forceRefresh ? 'force_refresh=true&' : ''}${sparkCacheBuster}`;
+        let sparkRes = null;
+        retries = 0;
+        
+        while (retries < maxRetries && !sparkRes) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 8000);
+                sparkRes = await fetch(sparkUrl, { 
+                    signal: controller.signal,
+                    headers: {
+                        ...headers,
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache'
+                    },
+                    cache: 'no-store'
+                });
+                clearTimeout(timeoutId);
+            } catch (fetchError) {
+                retries++;
+                if (retries >= maxRetries) break;
+                await new Promise(r => setTimeout(r, 1000));
+            }
+        }
+        
+        if (sparkRes && sparkRes.ok) {
             const sparkData = await sparkRes.json();
             const sparks = (sparkData && sparkData.sparklines && sparkData.sparklines.length > 0)
                 ? sparkData.sparklines
                 : buildFallbackSparklines();
-            renderLandingSparklines(sparks);
+            renderLandingSparklines(sparks, isAuthenticated);
             renderLandingMainChart(sparks);
-            pushLandingLog('Sparkline stream updated', 'info');
-        }
-        else {
+            const sparkSource = sparkData._cached ? 'cache' : 'live';
+            pushLandingLog(`Sparklines updated (${sparkSource})`, 'info');
+        } else {
             const fallbackSparks = buildFallbackSparklines();
-            renderLandingSparklines(fallbackSparks);
+            renderLandingSparklines(fallbackSparks, false);
             renderLandingMainChart(fallbackSparks);
-            pushLandingLog('Sparkline feed unavailable', 'warn');
+            pushLandingLog('Sparklines using fallback', 'warn');
         }
     }
     catch (error) {
         console.warn('Landing dashboard load failed:', error);
         const fallback = ensureLandingDataShape(null);
         const fallbackSparks = buildFallbackSparklines();
-        renderLandingHeatmap(fallback.heatmap);
+        renderLandingHeatmap(fallback.heatmap, null);
         renderOrderBookFromTop(fallback.heatmap[0]);
-        renderLandingSparklines(fallbackSparks);
+        renderLandingSparklines(fallbackSparks, false);
         renderLandingMainChart(fallbackSparks);
-        pushLandingLog('Landing feed error: using cached UI', 'warn');
+        pushLandingLog('Market feed error - using simulation', 'error');
+        
+        // Update system status to show error
+        const systemStatus = document.getElementById('hero-system-status');
+        if (systemStatus) {
+            systemStatus.textContent = 'DEGRADED';
+            systemStatus.className = 'negative';
+        }
+    }
+    finally {
+        // CRITICAL: Always reset the loading flag
+        isLoadingLanding = false;
+    }
+    
+    await fetchMarketNews();
+}
+
+async function fetchMarketNews() {
+    const newswire = document.getElementById('market-newswire');
+    if (!newswire) return;
+    try {
+        const res = await fetch(`${API_BASE_URL}/api/market-news`);
+        if (!res.ok) throw new Error('API Error');
+        const data = await res.json();
+        const news = data.news || [];
+        if (news.length === 0) {
+            newswire.innerHTML = `<div class="news-item"><span class="news-title" style="color:var(--text-secondary)">No news available.</span></div>`;
+            return;
+        }
+        
+        newswire.innerHTML = news.map(item => {
+            let timeStr = '';
+            if (item.published_at) {
+                try {
+                    const dt = new Date(item.published_at);
+                    timeStr = dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                } catch(e) {}
+            }
+            return `
+                <div class="news-item">
+                    <div class="news-meta">
+                        <span class="news-source">[${escapeHtml(item.source)}]</span>
+                        <span class="news-time">${timeStr}</span>
+                    </div>
+                    <a href="${item.url}" target="_blank" class="news-title">${escapeHtml(item.title)}</a>
+                </div>
+            `;
+        }).join('');
+        pushLandingLog('Newswire synced', 'info');
+    } catch (e) {
+        console.warn('Market news fetch failed:', e);
+        newswire.innerHTML = `<div class="news-item"><span class="news-title" style="color:var(--danger)">Newswire disconnect.</span></div>`;
     }
 }
+
 function applyInitialView() {
     if (window.location.hash === '#analysis') {
         showAnalysisView();
@@ -382,18 +741,60 @@ function applyInitialView() {
     }
     showHomeView();
 }
-// Initialize
+// Initialize - STABLE VERSION (no disco)
 async function init() {
     debugLogMissingElements();
     applyInitialView();
     setupEventListeners();
     await loadPopularSymbols();
-    await loadLandingDashboard();
+    
+    // NORMAL load (NOT force refresh) - prevents reload loops
+    console.log('[LANDING] Initial load (normal, not forced)');
+    await loadLandingDashboard(false); // NORMAL load - no force
+    
     setupAdvancedTabs();
+    
+    // Setup auto-refresh interval - 60 seconds (NOT 30) to prevent spam
     if (landingRefreshInterval) {
         clearInterval(landingRefreshInterval);
     }
-    landingRefreshInterval = setInterval(() => loadLandingDashboard(), 90000);
+    // STABLE: 60 second refresh (was 30)
+    landingRefreshInterval = setInterval(() => {
+        // Skip if tab not visible (prevents background spam)
+        if (!document.hidden) {
+            loadLandingDashboard(false);
+        }
+    }, 60000);
+    
+    // Setup visibility change - ONLY refresh if explicitly needed
+    let visibilityCheckInProgress = false;
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && !visibilityCheckInProgress) {
+            visibilityCheckInProgress = true;
+            console.log('[LANDING] Tab visible');
+            // Only refresh if portfolio was explicitly updated
+            const needsRefresh = localStorage.getItem('portfolio_needs_refresh');
+            if (needsRefresh === 'true') {
+                console.log('[LANDAND] Portfolio update detected, refreshing');
+                localStorage.removeItem('portfolio_needs_refresh');
+                loadLandingDashboard(false); // NORMAL refresh (not forced)
+            }
+            // OTHERWISE: Do nothing - prevents reload spam
+            setTimeout(() => { visibilityCheckInProgress = false; }, 5000);
+        }
+    });
+    
+    // Add manual refresh button handler
+    const refreshBtn = document.getElementById('refresh-market-data');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => loadLandingDashboard(true));
+    }
+    
+    // Expose cache clear function globally for debugging
+    window.clearMarketCache = () => {
+        loadLandingDashboard(true);
+        pushLandingLog('Cache cleared manually', 'info');
+    };
 }
 // Toast notification
 function showToast(message, type = 'error') {
@@ -420,67 +821,65 @@ function normalizeSymbol(rawSymbol) {
 // Event Listeners
 function setupEventListeners() {
     try {
-        if (elements.enterTerminalBtn) {
-            elements.enterTerminalBtn.addEventListener('click', showAnalysisView);
+        if (appElements.enterTerminalBtn) {
+            appElements.enterTerminalBtn.addEventListener('click', showAnalysisView);
         }
-        if (elements.homeNavBtn) {
-            elements.homeNavBtn.addEventListener('click', showHomeView);
+        if (appElements.homeNavBtn) {
+            appElements.homeNavBtn.addEventListener('click', showHomeView);
         }
-        if (elements.analysisNavBtn) {
-            elements.analysisNavBtn.addEventListener('click', showAnalysisView);
+        if (appElements.analysisNavBtn) {
+            appElements.analysisNavBtn.addEventListener('click', showAnalysisView);
         }
         // Mode selection
-        if (elements.modeBtns && elements.modeBtns.length > 0) {
-            elements.modeBtns.forEach(btn => {
+        if (appElements.modeBtns && appElements.modeBtns.length > 0) {
+            appElements.modeBtns.forEach(btn => {
                 btn.addEventListener('click', () => {
-                    elements.modeBtns.forEach(b => b.classList.remove('active'));
+                    appElements.modeBtns.forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
                     currentMode = btn.dataset.mode === 'long_term' ? 'longterm' : btn.dataset.mode;
                 });
             });
         }
-        // Analyze button
-        if (elements.analyzeBtn) {
-            elements.analyzeBtn.addEventListener('click', handleAnalyze);
-        } else {
-            console.warn('[SETUP] analyzeBtn not found');
+        // Analyze button (only on analysis page)
+        if (appElements.analyzeBtn) {
+            appElements.analyzeBtn.addEventListener('click', handleAnalyze);
         }
         // Popular symbols
-        if (elements.popularSymbolsBtn) {
-            elements.popularSymbolsBtn.addEventListener('click', () => {
-                if (elements.symbolsModal) {
-                    elements.symbolsModal.style.display = 'flex';
+        if (appElements.popularSymbolsBtn) {
+            appElements.popularSymbolsBtn.addEventListener('click', () => {
+                if (appElements.symbolsModal) {
+                    appElements.symbolsModal.style.display = 'flex';
                     renderSymbols('nse');
                 }
             });
         }
-        if (elements.modalClose) {
-            elements.modalClose.addEventListener('click', () => {
-                if (elements.symbolsModal) {
-                    elements.symbolsModal.style.display = 'none';
+        if (appElements.modalClose) {
+            appElements.modalClose.addEventListener('click', () => {
+                if (appElements.symbolsModal) {
+                    appElements.symbolsModal.style.display = 'none';
                 }
             });
         }
-        if (elements.symbolsModal) {
-            elements.symbolsModal.addEventListener('click', (e) => {
-                if (e.target === elements.symbolsModal) {
-                    elements.symbolsModal.style.display = 'none';
+        if (appElements.symbolsModal) {
+            appElements.symbolsModal.addEventListener('click', (e) => {
+                if (e.target === appElements.symbolsModal) {
+                    appElements.symbolsModal.style.display = 'none';
                 }
             });
         }
         // Tab buttons for modal
-        if (elements.tabBtns && elements.tabBtns.length > 0) {
-            elements.tabBtns.forEach(btn => {
+        if (appElements.tabBtns && appElements.tabBtns.length > 0) {
+            appElements.tabBtns.forEach(btn => {
                 btn.addEventListener('click', () => {
-                    elements.tabBtns.forEach(b => b.classList.remove('active'));
+                    appElements.tabBtns.forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
                     renderSymbols(btn.dataset.tab);
                 });
             });
         }
         // Enter key on input
-        if (elements.symbolInput) {
-            elements.symbolInput.addEventListener('keypress', (e) => {
+        if (appElements.symbolInput) {
+            appElements.symbolInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter')
                     handleAnalyze();
             });
@@ -515,24 +914,24 @@ async function loadPopularSymbols() {
 // Render symbols list
 function renderSymbols(exchange) {
     const symbols = popularSymbols[exchange] || [];
-    elements.symbolsList.innerHTML = symbols.map(symbol => `
+    appElements.symbolsList.innerHTML = symbols.map(symbol => `
         <div class="symbol-item" data-symbol="${symbol}">
             <span class="symbol-code">${symbol}</span>
             <span>Select →</span>
         </div>
     `).join('');
-    elements.symbolsList.querySelectorAll('.symbol-item').forEach(item => {
+    appElements.symbolsList.querySelectorAll('.symbol-item').forEach(item => {
         item.addEventListener('click', () => {
-            elements.symbolInput.value = item.dataset.symbol;
-            elements.symbolsModal.style.display = 'none';
+            appElements.symbolInput.value = item.dataset.symbol;
+            appElements.symbolsModal.style.display = 'none';
         });
     });
 }
 // Handle analyze
 async function handleAnalyze() {
     showAnalysisView();
-    const symbol = elements.symbolInput.value.trim().toUpperCase();
-    const portfolioValue = parseFloat(elements.portfolioInput.value) || 1000000;
+    const symbol = appElements.symbolInput.value.trim().toUpperCase();
+    const portfolioValue = parseFloat(appElements.portfolioInput.value) || 1000000;
     if (!symbol) {
         showToast('Please enter a stock symbol', 'error');
         return;
@@ -708,14 +1107,14 @@ const bootMessages = [
 ];
 
 function setLoading(loading) {
-    const btnText = elements.analyzeBtn.querySelector('.btn-text');
-    const btnLoader = elements.analyzeBtn.querySelector('.btn-loader');
+    const btnText = appElements.analyzeBtn.querySelector('.btn-text');
+    const btnLoader = appElements.analyzeBtn.querySelector('.btn-loader');
     
     if (loading) {
-        elements.analyzeBtn.disabled = true;
-        elements.analyzeBtn.style.background = 'rgba(239,83,80,0.2)';
-        elements.analyzeBtn.style.borderColor = 'var(--danger)';
-        elements.analyzeBtn.style.boxShadow = '0 0 20px rgba(239,83,80,0.4)';
+        appElements.analyzeBtn.disabled = true;
+        appElements.analyzeBtn.style.background = 'rgba(239,83,80,0.2)';
+        appElements.analyzeBtn.style.borderColor = 'var(--danger)';
+        appElements.analyzeBtn.style.boxShadow = '0 0 20px rgba(239,83,80,0.4)';
         
         if (btnLoader)
             btnLoader.style.display = 'inline';
@@ -731,8 +1130,8 @@ function setLoading(loading) {
 
             // Random glitch effect on button
             if (Math.random() > 0.7) {
-                elements.analyzeBtn.style.transform = 'translate(' + (Math.random()*4-2) + 'px, ' + (Math.random()*4-2) + 'px)';
-                setTimeout(() => elements.analyzeBtn.style.transform = 'none', 50);
+                appElements.analyzeBtn.style.transform = 'translate(' + (Math.random()*4-2) + 'px, ' + (Math.random()*4-2) + 'px)';
+                setTimeout(() => appElements.analyzeBtn.style.transform = 'none', 50);
             }
         }, 300);
         
@@ -744,22 +1143,22 @@ function setLoading(loading) {
 
     } else {
         clearInterval(bootSequenceInterval);
-        elements.analyzeBtn.disabled = false;
-        elements.analyzeBtn.style.background = 'rgba(41,98,255,0.2)';
-        elements.analyzeBtn.style.borderColor = 'var(--info)';
-        elements.analyzeBtn.style.boxShadow = '0 0 15px rgba(41,98,255,0.4)';
+        appElements.analyzeBtn.disabled = false;
+        appElements.analyzeBtn.style.background = 'rgba(41,98,255,0.2)';
+        appElements.analyzeBtn.style.borderColor = 'var(--info)';
+        appElements.analyzeBtn.style.boxShadow = '0 0 15px rgba(41,98,255,0.4)';
         if (btnText)
             btnText.textContent = '[ EXECUTE QUANTITATIVE ANALYSIS ]';
         if (btnLoader)
             btnLoader.style.display = 'none';
 
         // Dramatic reveal of results
-        elements.resultsSection.style.opacity = '0';
-        elements.resultsSection.style.transform = 'translateY(50px)';
+        appElements.resultsSection.style.opacity = '0';
+        appElements.resultsSection.style.transform = 'translateY(50px)';
         setTimeout(() => {
-            elements.resultsSection.style.transition = 'all 0.5s cubic-bezier(0.1, 1, 0.1, 1)';
-            elements.resultsSection.style.opacity = '1';
-            elements.resultsSection.style.transform = 'translateY(0)';
+            appElements.resultsSection.style.transition = 'all 0.5s cubic-bezier(0.1, 1, 0.1, 1)';
+            appElements.resultsSection.style.opacity = '1';
+            appElements.resultsSection.style.transform = 'translateY(0)';
         }, 100);
     }
 }
@@ -770,10 +1169,10 @@ function displayResults(data) {
     latestAnalysisData = data;
     showAnalysisView();
     // Show results, hide empty state
-    if (elements.emptyState) elements.emptyState.style.display = 'none';
-    if (elements.resultsSection) {
-        elements.resultsSection.style.display = 'block';
-        elements.resultsSection.classList.add('active');
+    if (appElements.emptyState) appElements.emptyState.style.display = 'none';
+    if (appElements.resultsSection) {
+        appElements.resultsSection.style.display = 'block';
+        appElements.resultsSection.classList.add('active');
     }
     // Update price card - with null checks
     const symbolEl = document.getElementById('result-symbol');
@@ -827,7 +1226,7 @@ function displayResults(data) {
     updatePredictionChart(data.ai_prediction);
     updateAIPredictionTransparency(data.ai_prediction, data.sentiment_analysis, data.technical_analysis);
     // Scroll to results
-    elements.resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    appElements.resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     // Start live refresh loops for news and alerts
     startLiveNewsUpdates(data.symbol);
     startLiveAlertsMonitoring(data.symbol);
@@ -1674,7 +2073,7 @@ function openArticleExternal() {
 // ============ ADVANCED AI FEATURES ============
 // LSTM Training & Prediction
 async function trainLSTM() {
-    const symbol = normalizeSymbol(elements.symbolInput.value);
+    const symbol = normalizeSymbol(appElements.symbolInput.value);
     if (!symbol) {
         showToast('Please enter a stock symbol', 'error');
         return;
@@ -1727,7 +2126,7 @@ async function trainLSTM() {
 }
 // Transformer Training & Prediction
 async function trainTransformer() {
-    const symbol = normalizeSymbol(elements.symbolInput.value);
+    const symbol = normalizeSymbol(appElements.symbolInput.value);
     if (!symbol) {
         showToast('Please enter a stock symbol', 'error');
         return;
@@ -1780,7 +2179,7 @@ async function trainTransformer() {
 }
 // Portfolio Optimization (RL)
 async function optimizePortfolio() {
-    const symbol = normalizeSymbol(elements.symbolInput.value);
+    const symbol = normalizeSymbol(appElements.symbolInput.value);
     if (!symbol) {
         showToast('Please enter a stock symbol', 'error');
         return;
@@ -1832,7 +2231,7 @@ async function optimizePortfolio() {
 }
 // Backtest RSI
 async function backtestRSI() {
-    const symbol = normalizeSymbol(elements.symbolInput.value);
+    const symbol = normalizeSymbol(appElements.symbolInput.value);
     if (!symbol) {
         showToast('Please enter a stock symbol', 'error');
         return;
@@ -1874,7 +2273,7 @@ async function backtestRSI() {
 // Backtest MACD
 async function backtestMACD() {
     var _a;
-    const symbol = normalizeSymbol(elements.symbolInput.value);
+    const symbol = normalizeSymbol(appElements.symbolInput.value);
     if (!symbol) {
         showToast('Please enter a stock symbol', 'error');
         return;
@@ -1941,15 +2340,15 @@ async function createAlert() {
         showToast(`Failed to create alert: ${error.message}`, 'error');
     }
 }
-// Load Alerts
+// Load Alerts (only runs if alerts-list element exists on current page)
 async function loadAlerts() {
     try {
-        const response = await fetch(`${API_BASE_URL}/api/ai/alerts`);
         const alertsList = document.getElementById('alerts-list');
         if (!alertsList) {
-            console.warn('alerts-list element not found in DOM');
+            // Silently return if element not on this page
             return;
         }
+        const response = await fetch(`${API_BASE_URL}/api/ai/alerts`);
         if (!response.ok) {
             alertsList.innerHTML = '<p style="color: var(--text-secondary);">Unable to load alerts right now.</p>';
             return;
@@ -2061,7 +2460,7 @@ async function deleteAlert(alertId) {
 }
 async function explainPrediction() {
     var _a, _b, _c, _d;
-    const symbol = normalizeSymbol(elements.symbolInput.value);
+    const symbol = normalizeSymbol(appElements.symbolInput.value);
     if (!symbol) {
         showToast('Please enter a stock symbol', 'error');
         return;

@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List, Dict, Any
@@ -30,12 +31,13 @@ except ImportError:
 from app.database import create_tables, get_db, User
 from sqlalchemy.orm import Session
 
-# Authentication
+# Authentication - Supabase-based
 from app.auth import (
     Token, UserCreate, UserLogin, UserResponse, PasswordChange,
     login_user, create_user, get_current_user, get_current_user_optional, get_current_active_user,
     refresh_access_token, logout_user, generate_user_api_key, revoke_api_key
 )
+from app.supabase_auth import SupabaseUser
 
 # Cache and Rate Limiting
 from app.cache import (
@@ -89,6 +91,28 @@ app = FastAPI(
     redoc_url="/api/redoc"
 )
 
+# Add validation error handler to log 422 errors
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    print(f"[VALIDATION ERROR] {request.method} {request.url.path}")
+    print(f"[VALIDATION ERROR] Errors: {exc.errors()}")
+    print(f"[VALIDATION ERROR] Body: {exc.body}")
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": exc.errors(), "body": exc.body},
+    )
+
+# Add generic exception handler
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    print(f"[ERROR] {request.method} {request.url.path} - {type(exc).__name__}: {str(exc)}")
+    import traceback
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error", "error_type": type(exc).__name__},
+    )
+
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
@@ -98,37 +122,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Request logging and error handling middleware
+# Request logging middleware - simplified to avoid exception handling issues
 @app.middleware("http")
 async def logging_middleware(request: Request, call_next):
     """Log all requests and add rate limit headers"""
     import time
     start_time = time.time()
 
-    try:
-        response = await call_next(request)
+    response = await call_next(request)
 
-        # Add rate limit headers if available
-        if hasattr(request.state, 'rate_limit_remaining'):
-            response.headers["X-RateLimit-Remaining"] = str(request.state.rate_limit_remaining)
-        if hasattr(request.state, 'rate_limit_reset'):
-            response.headers["X-RateLimit-Reset"] = str(request.state.rate_limit_reset)
+    # Add rate limit headers if available
+    if hasattr(request.state, 'rate_limit_remaining'):
+        response.headers["X-RateLimit-Remaining"] = str(request.state.rate_limit_remaining)
+    if hasattr(request.state, 'rate_limit_reset'):
+        response.headers["X-RateLimit-Reset"] = str(request.state.rate_limit_reset)
 
-        # Log request
-        duration = time.time() - start_time
-        print(f"[{request.method}] {request.url.path} - {response.status_code} - {duration:.3f}s")
+    # Log request
+    duration = time.time() - start_time
+    print(f"[{request.method}] {request.url.path} - {response.status_code} - {duration:.3f}s")
 
-        return response
-    except HTTPException as he:
-        # Re-raise HTTP exceptions
-        duration = time.time() - start_time
-        print(f"[{request.method}] {request.url.path} - {he.status_code} - {duration:.3f}s - {he.detail}")
-        raise
-    except Exception as e:
-        # Log unexpected errors
-        duration = time.time() - start_time
-        print(f"[{request.method}] {request.url.path} - 500 - {duration:.3f}s - ERROR: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+    return response
 
 # Mount static files
 base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -282,12 +295,28 @@ async def serve_analysis():
         return FileResponse(analysis_path)
     return {"detail": "Not Found"}
 
+@app.get("/setup.html")
+async def serve_setup():
+    """Serve portfolio setup onboarding page"""
+    setup_path = os.path.join(frontend_dir, "setup.html")
+    if os.path.exists(setup_path):
+        return FileResponse(setup_path)
+    return {"detail": "Not Found"}
+
 @app.get("/dashboard.html")
 async def serve_dashboard():
     """Serve dashboard page"""
     dashboard_path = os.path.join(frontend_dir, "dashboard.html")
     if os.path.exists(dashboard_path):
         return FileResponse(dashboard_path)
+    return {"detail": "Not Found"}
+
+@app.get("/portfolio.html")
+async def serve_portfolio():
+    """Serve portfolio management page"""
+    portfolio_path = os.path.join(frontend_dir, "portfolio.html")
+    if os.path.exists(portfolio_path):
+        return FileResponse(portfolio_path)
     return {"detail": "Not Found"}
 
 @app.get("/data-sources.html")
@@ -306,94 +335,18 @@ async def serve_test():
         return FileResponse(test_path)
     return {"detail": "Not Found"}
 
+@app.get("/audit-trail.html")
+async def serve_audit_trail():
+    """Serve Veritas audit trail page"""
+    audit_path = os.path.join(frontend_dir, "audit-trail.html")
+    if os.path.exists(audit_path):
+        return FileResponse(audit_path)
+    return {"detail": "Not Found"}
+
 # ==================== LANDING PAGE DATA ENDPOINTS ====================
 
-@app.get("/api/landing-data")
-async def get_landing_data():
-    """Fetch real-time market data for landing page heatmap and indices"""
-    try:
-        # Fetch top Indian stocks with real data
-        symbols = ['RELIANCE.NS', 'TCS.NS', 'INFY.NS', 'HDFCBANK.NS', 'ICICIBANK.NS', 
-                   'SBIN.NS', 'ITC.NS', 'LT.NS', 'AXISBANK.NS', 'KOTAKBANK.NS',
-                   'SUNPHARMA.NS', 'MARUTI.NS', 'TITAN.NS', 'BAJFINANCE.NS', 'HCLTECH.NS']
-        
-        heatmap_data = []
-        indices = []
-        
-        # Fetch NIFTY 50 and SENSEX indices
-        try:
-            nifty = yf.Ticker("^NSEI").history(period="1d")
-            if not nifty.empty:
-                nifty_change = ((nifty['Close'].iloc[-1] - nifty['Open'].iloc[-1]) / nifty['Open'].iloc[-1] * 100) if len(nifty) > 0 else 0
-                indices.append({
-                    "name": "NIFTY 50",
-                    "change_pct": float(nifty_change),
-                    "price": float(nifty['Close'].iloc[-1]) if not nifty.empty else 0
-                })
-        except:
-            pass
-        
-        try:
-            sensex = yf.Ticker("^BSESN").history(period="1d")
-            if not sensex.empty:
-                sensex_change = ((sensex['Close'].iloc[-1] - sensex['Open'].iloc[-1]) / sensex['Open'].iloc[-1] * 100) if len(sensex) > 0 else 0
-                indices.append({
-                    "name": "SENSEX",
-                    "change_pct": float(sensex_change),
-                    "price": float(sensex['Close'].iloc[-1]) if not sensex.empty else 0
-                })
-        except:
-            pass
-        
-        # Fetch individual stock data
-        for symbol in symbols:
-            try:
-                ticker = yf.Ticker(symbol)
-                hist = ticker.history(period="1d")
-                if not hist.empty:
-                    current_price = float(hist['Close'].iloc[-1])
-                    prev_price = float(hist['Open'].iloc[-1]) if len(hist) > 0 else current_price
-                    change_pct = ((current_price - prev_price) / prev_price * 100) if prev_price > 0 else 0
-                    
-                    heatmap_data.append({
-                        "symbol": symbol.replace('.NS', '').replace('.BO', ''),
-                        "price": current_price,
-                        "change_pct": float(change_pct)
-                    })
-            except Exception as e:
-                print(f"[WARNING] Failed to fetch {symbol}: {e}")
-                continue
-        
-        return {
-            "heatmap": heatmap_data[:30],  # Return top 30 stocks
-            "indices": indices,
-            "system": {
-                "status": "ONLINE",
-                "api_keys": {
-                    "finnhub": bool(os.getenv("FINNHUB_API_KEY")),
-                    "gemini": bool(os.getenv("GEMINI_API_KEY")),
-                    "sarvam": bool(os.getenv("SARVAM_API_KEY")),
-                    "news": bool(os.getenv("NEWS_API_KEY"))
-                },
-                "ml_models": {
-                    "sentiment": "READY",
-                    "lstm": "DISABLED",  # Too memory intensive
-                    "transformer": "DISABLED"
-                }
-            }
-        }
-    except Exception as e:
-        print(f"[ERROR] Landing data fetch failed: {e}")
-        # Return fallback data
-        return {
-            "heatmap": [],
-            "indices": [],
-            "system": {
-                "status": "DEGRADED",
-                "api_keys": {},
-                "ml_models": {}
-            }
-        }
+# Note: The /api/landing-data endpoint is defined at line ~1220 with better caching
+# This section only contains the sparklines endpoint
 
 @app.get("/api/sparklines")
 async def get_sparklines():
@@ -434,55 +387,72 @@ async def get_sparklines():
             "timestamp": datetime.now().isoformat()
         }
 
+@app.get("/api/market-news")
+async def get_market_news():
+    """Fetch general market news wire"""
+    try:
+        from app.sentiment import sentiment_analyzer
+        news = sentiment_analyzer.fetch_general_market_news()
+        return {
+            "news": news,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        print(f"[ERROR] Market news endpoint failed: {e}")
+        return {
+            "news": [],
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
 # ==================== AUTHENTICATION ENDPOINTS ====================
 
-@app.post("/api/auth/register", response_model=UserResponse, dependencies=[Depends(RateLimitAuth)])
-async def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user account"""
-    user = create_user(db, user_data)
-    return user
+@app.post("/api/auth/register", dependencies=[Depends(RateLimitAuth)])
+async def register(user_data: UserCreate):
+    """Register a new user account with Supabase Auth"""
+    user_dict, _ = create_user(user_data)
+    return user_dict
 
 @app.post("/api/auth/login", response_model=Token, dependencies=[Depends(RateLimitAuth)])
-async def login(login_data: UserLogin, request: Request, db: Session = Depends(get_db)):
-    """Login and receive JWT tokens"""
-    return login_user(db, login_data.username, login_data.password, request)
+async def login(login_data: UserLogin, request: Request):
+    """Login and receive Supabase JWT tokens"""
+    return login_user(login_data.email, login_data.password, request)
 
 @app.post("/api/auth/refresh")
-async def refresh_token(refresh_token: str, db: Session = Depends(get_db)):
+async def refresh_token(refresh_token: str):
     """Refresh access token using refresh token"""
-    return refresh_access_token(db, refresh_token)
+    return refresh_access_token(refresh_token)
 
 @app.post("/api/auth/logout")
 async def logout(
     request: Request,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: SupabaseUser = Depends(get_current_user)
 ):
-    """Logout user"""
-    logout_user(db, current_user.id, request)
+    """Logout user - invalidate Supabase session"""
+    # Get the token from the request header for logout
+    auth_header = request.headers.get("authorization", "")
+    access_token = auth_header.replace("Bearer ", "") if auth_header.startswith("Bearer ") else None
+    
+    if access_token:
+        logout_user(current_user.id, access_token, request)
     return {"message": "Logged out successfully"}
 
-@app.get("/api/auth/me", response_model=UserResponse)
-async def get_me(current_user: User = Depends(get_current_user)):
-    """Get current user information"""
-    return current_user
+@app.get("/api/auth/me")
+async def get_me(current_user: SupabaseUser = Depends(get_current_user)):
+    """Get current user information from Supabase"""
+    return current_user.to_dict()
 
 @app.post("/api/auth/api-key")
-async def generate_api_key_endpoint(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def generate_api_key_endpoint(current_user: SupabaseUser = Depends(get_current_user)):
     """Generate API key for programmatic access"""
-    api_key = generate_user_api_key(db, current_user.id)
+    api_key = generate_user_api_key(current_user.id)
     return {"api_key": api_key, "message": "Store this key safely, it won't be shown again"}
 
 @app.delete("/api/auth/api-key")
-async def revoke_api_key_endpoint(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def revoke_api_key_endpoint(current_user: SupabaseUser = Depends(get_current_user)):
     """Revoke API key"""
-    revoke_api_key(db, current_user.id)
+    revoke_api_key(current_user.id)
     return {"message": "API key revoked successfully"}
 
 # ==================== STOCK ANALYSIS ENDPOINTS ====================
@@ -493,7 +463,7 @@ async def analyze(
     mode: str = Query("swing", description="Analysis mode: intraday, swing, longterm"),
     fast: bool = Query(True, description="Fast mode: skip heavy analysis"),
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Analyze a stock and return comprehensive analysis - OPTIMIZED FOR SPEED"""
     if mode not in ['intraday', 'swing', 'longterm']:
@@ -557,7 +527,14 @@ async def analyze(
             else:
                 indicators = ti.get_all_indicators_longterm()
 
-            sentiment_result = sentiment_analyzer.get_sentiment_for_stock(symbol)
+            # Use async sentiment fetching to prevent server blocking
+            try:
+                sentiment_result = await sentiment_analyzer.get_sentiment_for_stock_async(symbol)
+            except Exception as e:
+                print(f"[SENTIMENT] Async fetch failed, falling back to cached: {e}")
+                # Fallback: try to get from cache or use neutral
+                sentiment_result = sentiment_analyzer.get_sentiment_for_stock(symbol, use_cache=True)
+            
             sentiment_score = sentiment_result['sentiment_score']
             sentiment_class = sentiment_result['sentiment_classification']
 
@@ -663,7 +640,7 @@ async def professional_analyze(
     portfolio_value: float = Query(1000000, description="Portfolio value in INR"),
     fast_mode: bool = Query(False, description="Fast mode: skip fundamental analysis for speed"),
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Professional-grade stock analysis with comprehensive metrics
     
@@ -712,7 +689,7 @@ async def professional_analyze(
 async def professional_dashboard(
     symbol: str = Query(..., description="Stock symbol (e.g., HDFCBANK.NS)"),
     mode: str = Query("swing", description="Analysis mode: intraday, swing, longterm"),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Advanced dashboard payload with multi-chart quantitative analytics."""
     if mode not in ['intraday', 'swing', 'longterm']:
@@ -731,7 +708,7 @@ async def professional_dashboard(
 async def get_options_chain(
     symbol: str,
     expiry: Optional[str] = None,
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Get options chain with Greeks calculation"""
     try:
@@ -766,17 +743,28 @@ async def get_options_recommendations(
 
 @app.get("/api/watchlists")
 async def get_watchlists(
-    current_user: User = Depends(get_current_user),
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get all user watchlists"""
+    """Get all user watchlists - Uses Supabase if available, falls back to SQLite"""
+    try:
+        # Try Supabase first
+        from app.supabase_watchlist import get_supabase_watchlist_manager
+        supabase_manager = get_supabase_watchlist_manager(current_user.id)
+        watchlists = supabase_manager.get_watchlists()
+        if watchlists and watchlists[0].get("symbols"):
+            return {"watchlists": watchlists}
+    except Exception as e:
+        print(f"[WATCHLIST] Supabase error, falling back to SQLite: {e}")
+    
+    # Fallback to SQLite
     manager = get_watchlist_manager(db)
     return manager.get_user_watchlists(current_user.id)
 
 @app.post("/api/watchlists")
 async def create_watchlist(
     watchlist_data: WatchlistCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Create a new watchlist"""
@@ -792,7 +780,7 @@ async def create_watchlist(
 async def get_watchlist(
     watchlist_id: int,
     live_data: bool = False,
-    current_user: User = Depends(get_current_user),
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get specific watchlist"""
@@ -814,7 +802,7 @@ async def update_watchlist(
     name: Optional[str] = None,
     description: Optional[str] = None,
     is_default: Optional[bool] = None,
-    current_user: User = Depends(get_current_user),
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Update watchlist details"""
@@ -824,7 +812,7 @@ async def update_watchlist(
 @app.delete("/api/watchlists/{watchlist_id}")
 async def delete_watchlist(
     watchlist_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Delete a watchlist"""
@@ -836,7 +824,7 @@ async def delete_watchlist(
 async def add_symbol_to_watchlist(
     watchlist_id: int,
     item_data: WatchlistItemAdd,
-    current_user: User = Depends(get_current_user),
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Add symbol to watchlist"""
@@ -856,7 +844,7 @@ async def add_symbol_to_watchlist(
 async def remove_symbol_from_watchlist(
     watchlist_id: int,
     item_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Remove symbol from watchlist"""
@@ -870,20 +858,47 @@ async def remove_symbol_from_watchlist(
 async def get_alerts(
     active_only: bool = True,
     symbol: Optional[str] = None,
-    current_user: User = Depends(get_current_user),
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get user alerts"""
+    """Get user alerts - Uses Supabase if available, falls back to SQLite"""
+    try:
+        from app.supabase_alerts import get_supabase_alert_manager
+        supabase_manager = get_supabase_alert_manager(current_user.id)
+        alerts = supabase_manager.get_alerts(active_only, symbol)
+        if alerts:
+            return {"alerts": alerts, "count": len(alerts), "source": "supabase"}
+    except Exception as e:
+        print(f"[ALERTS] Supabase error, falling back to SQLite: {e}")
+    
+    # Fallback to SQLite
     manager = get_alert_manager(db)
     return manager.get_user_alerts(current_user.id, active_only, symbol)
 
 @app.post("/api/alerts")
 async def create_alert(
     alert_data: AlertCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Create a new alert"""
+    """Create a new alert - Saves to both Supabase and SQLite"""
+    # Try Supabase first
+    try:
+        from app.supabase_alerts import get_supabase_alert_manager
+        supabase_manager = get_supabase_alert_manager(current_user.id)
+        alert = supabase_manager.create_alert(
+            alert_data.symbol,
+            alert_data.alert_type,
+            alert_data.condition,
+            alert_data.value,
+            alert_data.message
+        )
+        if alert:
+            return {"alert": alert, "source": "supabase", "message": "Alert created successfully"}
+    except Exception as e:
+        print(f"[ALERTS] Supabase error, using SQLite: {e}")
+    
+    # Fallback to SQLite
     manager = get_alert_manager(db)
     return manager.create_alert(
         current_user.id,
@@ -897,43 +912,82 @@ async def create_alert(
 
 @app.put("/api/alerts/{alert_id}")
 async def update_alert(
-    alert_id: int,
+    alert_id: str,
     value: Optional[float] = None,
     message: Optional[str] = None,
     is_active: Optional[bool] = None,
-    current_user: User = Depends(get_current_user),
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Update an alert"""
+    """Update an alert - Updates both Supabase and SQLite"""
+    # Try Supabase first
+    try:
+        from app.supabase_alerts import get_supabase_alert_manager
+        supabase_manager = get_supabase_alert_manager(current_user.id)
+        success = supabase_manager.update_alert(
+            str(alert_id),
+            value=value,
+            message=message,
+            is_active=is_active
+        )
+        if success:
+            return {"message": "Alert updated successfully", "source": "supabase"}
+    except Exception as e:
+        print(f"[ALERTS] Supabase error: {e}")
+    
+    # Fallback to SQLite
     manager = get_alert_manager(db)
-    return manager.update_alert(alert_id, current_user.id, value, message, is_active)
+    return manager.update_alert(int(alert_id), current_user.id, value, message, is_active)
 
 @app.delete("/api/alerts/{alert_id}")
 async def delete_alert(
-    alert_id: int,
-    current_user: User = Depends(get_current_user),
+    alert_id: str,
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Delete an alert"""
-    manager = get_alert_manager(db)
-    manager.delete_alert(alert_id, current_user.id)
-    return {"message": "Alert deleted successfully"}
+    """Delete an alert - Deletes from both Supabase and SQLite"""
+    # Try Supabase first
+    try:
+        from app.supabase_alerts import get_supabase_alert_manager
+        supabase_manager = get_supabase_alert_manager(current_user.id)
+        success = supabase_manager.delete_alert(str(alert_id))
+        if success:
+            return {"message": "Alert deleted successfully", "source": "supabase"}
+    except Exception as e:
+        print(f"[ALERTS] Supabase error: {e}")
+    
+    # Fallback to SQLite
+    try:
+        manager = get_alert_manager(db)
+        manager.delete_alert(int(alert_id), current_user.id)
+        return {"message": "Alert deleted successfully"}
+    except:
+        return {"message": "Alert not found or already deleted"}
 
 @app.post("/api/alerts/{alert_id}/reactivate")
 async def reactivate_alert(
-    alert_id: int,
-    current_user: User = Depends(get_current_user),
+    alert_id: str,
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Reactivate a triggered alert"""
+    try:
+        from app.supabase_alerts import get_supabase_alert_manager
+        supabase_manager = get_supabase_alert_manager(current_user.id)
+        success = supabase_manager.update_alert(str(alert_id), is_triggered=False, is_active=True)
+        if success:
+            return {"message": "Alert reactivated successfully", "source": "supabase"}
+    except Exception as e:
+        print(f"[ALERTS] Supabase error: {e}")
+    
     manager = get_alert_manager(db)
-    return manager.reactivate_alert(alert_id, current_user.id)
+    return manager.reactivate_alert(int(alert_id), current_user.id)
 
 # ==================== PAPER TRADING ENDPOINTS ====================
 
 @app.get("/api/paper-trading/portfolio")
 async def get_paper_portfolio(
-    current_user: User = Depends(get_current_user),
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get paper trading portfolio summary"""
@@ -942,7 +996,7 @@ async def get_paper_portfolio(
 
 @app.get("/api/paper-trading/positions")
 async def get_paper_positions(
-    current_user: User = Depends(get_current_user),
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get open positions"""
@@ -953,7 +1007,7 @@ async def get_paper_positions(
 async def get_paper_trades(
     status: Optional[str] = None,
     symbol: Optional[str] = None,
-    current_user: User = Depends(get_current_user),
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get paper trades"""
@@ -964,7 +1018,7 @@ async def get_paper_trades(
 @app.post("/api/paper-trading/trades")
 async def place_paper_trade(
     trade_data: TradeRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Place a paper trade"""
@@ -985,7 +1039,7 @@ async def close_paper_trade(
     trade_id: int,
     exit_price: Optional[float] = None,
     notes: Optional[str] = None,
-    current_user: User = Depends(get_current_user),
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Close a paper trade"""
@@ -995,7 +1049,7 @@ async def close_paper_trade(
 @app.post("/api/paper-trading/reset")
 async def reset_paper_portfolio(
     confirm: bool = False,
-    current_user: User = Depends(get_current_user),
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Reset paper trading portfolio"""
@@ -1074,10 +1128,36 @@ async def health_check():
             "api": "active",
             "indicators": "active",
             "sentiment": "active",
+            "cache": "connected" if cache.is_connected() else "memory_only",
             "ml_models": {mode: "trained" if pred.is_trained else "untrained" 
                          for mode, pred in predictors.items()}
         }
     }
+
+@app.get("/api/cache/status")
+async def cache_status():
+    """Get cache status and statistics"""
+    try:
+        stats = cache.get_cache_stats()
+        
+        # Try to get landing data cache info
+        landing_cached = cache.get_landing_data()
+        sparklines_cached = cache.get_sparklines()
+        
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "cache_stats": stats,
+            "landing_data_cached": landing_cached is not None,
+            "landing_data_age": (datetime.now() - datetime.fromisoformat(landing_cached.get('timestamp', '2000-01-01'))).total_seconds() if landing_cached else None,
+            "sparklines_cached": sparklines_cached is not None,
+            "sparklines_age": (datetime.now() - datetime.fromisoformat(sparklines_cached.get('timestamp', '2000-01-01'))).total_seconds() if sparklines_cached else None,
+        }
+    except Exception as e:
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e),
+            "cache_connected": cache.is_connected()
+        }
 
 @app.get("/data-sources.html")
 async def serve_data_sources():
@@ -1088,14 +1168,203 @@ async def serve_data_sources():
     return FileResponse(ds_path)
 
 
-@app.get("/api/landing-data")
-async def get_landing_data():
+@app.get("/api/landing-data/personalized")
+async def get_personalized_landing_data(
+    force_refresh: bool = False,
+    current_user: SupabaseUser = Depends(get_current_user)
+):
     """
-    Fetch real-time market data for the landing page dashboard.
-    Returns live index values, top stock heatmap data, and system health.
+    Fetch personalized real-time market data for logged-in users.
+    Shows only indices and user's portfolio stocks (not all 30 stocks).
     """
     import concurrent.futures
     import traceback
+    
+    # Get user's portfolio to determine which stocks to show
+    from app.supabase_portfolio import get_user_portfolio_manager
+    portfolio_manager = get_user_portfolio_manager(current_user.id)
+    summary = portfolio_manager.get_portfolio_summary()
+    
+    # Get user's portfolio positions
+    user_positions = summary.get('positions', [])
+    user_symbols = [pos['symbol'] for pos in user_positions if pos.get('symbol')]
+    
+    print(f"[LANDING-PERSONALIZED] User {current_user.id}: {len(user_positions)} positions, symbols: {user_symbols}")
+    
+    # Always include major indices
+    indices_map = {
+        "NIFTY 50": "^NSEI",
+        "SENSEX": "^BSESN", 
+        "BANKNIFTY": "^NSEBANK",
+        "INDIA VIX": "^INDIAVIX",
+    }
+    
+    def _fetch_index(name, ticker_symbol):
+        try:
+            t = yf.Ticker(ticker_symbol)
+            hist = t.history(period="2d", interval="1d")
+            if hist.empty or len(hist) < 1:
+                return None
+            last = hist.iloc[-1]
+            prev = hist.iloc[-2] if len(hist) >= 2 else hist.iloc[-1]
+            close = float(last["Close"])
+            prev_close = float(prev["Close"])
+            change = close - prev_close
+            change_pct = (change / prev_close * 100) if prev_close != 0 else 0
+            return {
+                "name": name,
+                "value": round(close, 2),
+                "change": round(change, 2),
+                "change_pct": round(change_pct, 2),
+            }
+        except Exception:
+            return None
+    
+    def _fetch_stock(sym):
+        try:
+            t = yf.Ticker(sym)
+            hist = t.history(period="2d", interval="1d")
+            if hist.empty or len(hist) < 1:
+                return None
+            last = hist.iloc[-1]
+            prev = hist.iloc[-2] if len(hist) >= 2 else hist.iloc[-1]
+            close = float(last["Close"])
+            prev_close = float(prev["Close"])
+            change_pct = ((close - prev_close) / prev_close * 100) if prev_close else 0
+            short_name = sym.replace(".NS", "").replace(".BO", "")
+            
+            # Check if user holds this stock
+            is_in_portfolio = sym in user_symbols
+            position_info = None
+            if is_in_portfolio:
+                for pos in user_positions:
+                    if pos['symbol'] == sym:
+                        position_info = pos
+                        break
+            
+            return {
+                "symbol": short_name,
+                "full_symbol": sym,
+                "price": round(close, 2),
+                "change_pct": round(change_pct, 2),
+                "is_in_portfolio": is_in_portfolio,
+                "position": position_info,
+            }
+        except Exception:
+            return None
+    
+    try:
+        indices_result = []
+        
+        # For portfolio heatmap - show user's stocks (or default top 10 if no portfolio)
+        if user_symbols:
+            heatmap_symbols = user_symbols[:20]  # Max 20 user stocks
+            # Add portfolio value context
+            portfolio_value = summary.get('total_value', 0)
+            portfolio_day_change = summary.get('day_change', 0)
+        else:
+            # User has no portfolio yet - show empty state
+            heatmap_symbols = []
+            portfolio_value = 0
+            portfolio_day_change = 0
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
+            idx_futures = {pool.submit(_fetch_index, n, s): n for n, s in indices_map.items()}
+            stk_futures = {pool.submit(_fetch_stock, s): s for s in heatmap_symbols}
+            
+            for f in concurrent.futures.as_completed(idx_futures):
+                r = f.result()
+                if r:
+                    indices_result.append(r)
+            
+            heatmap_result = []
+            failed_symbols = []
+            for f in concurrent.futures.as_completed(stk_futures):
+                r = f.result()
+                if r:
+                    heatmap_result.append(r)
+                else:
+                    # Track failed symbol for debugging
+                    failed_sym = stk_futures.get(f, 'unknown')
+                    failed_symbols.append(failed_sym)
+            
+            if failed_symbols:
+                print(f"[LANDING-PERSONALIZED] Failed to fetch data for: {failed_symbols}")
+        
+        print(f"[LANDING-PERSONALIZED] Returning {len(heatmap_result)} stocks in heatmap")
+        
+        # Sort heatmap by user's investment value (if portfolio exists)
+        heatmap_result.sort(key=lambda x: x.get('position', {}).get('market_value', 0) if x.get('position') else 0, reverse=True)
+        
+        from fastapi.responses import JSONResponse
+        
+        response_data = {
+            "timestamp": datetime.now().isoformat(),
+            "indices": clean_nan_values(indices_result),
+            "heatmap": clean_nan_values(heatmap_result),
+            "portfolio_summary": {
+                "total_value": portfolio_value,
+                "day_change": portfolio_day_change,
+                "positions_count": len(user_positions),
+                "is_setup": summary.get('is_setup', False),
+            },
+            "system": {
+                "version": "2.0.0",
+                "status": "OPERATIONAL",
+                "personalized": True,
+            },
+        }
+        
+        # Return with cache-control headers to prevent any caching
+        return JSONResponse(
+            content=response_data,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
+        
+    except Exception as e:
+        traceback.print_exc()
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "indices": [],
+            "heatmap": [],
+            "portfolio_summary": {"total_value": 0, "positions_count": 0, "is_setup": False},
+            "system": {"version": "2.0.0", "status": "ERROR", "error": str(e)},
+        }
+
+
+@app.get("/api/landing-data")
+async def get_landing_data(force_refresh: bool = False):
+    """
+    Fetch real-time market data for the landing page dashboard.
+    Returns live index values, top stock heatmap data, and system health.
+    Uses intelligent caching with stale-while-revalidate pattern.
+    """
+    import concurrent.futures
+    import traceback
+    
+    # Check cache first - we'll use it as fallback if live fetch fails
+    cached_data = None
+    if not force_refresh:
+        try:
+            cached_data = cache.get_landing_data()
+            if cached_data:
+                # Check if cache is fresh (less than 60 seconds old)
+                cache_time = datetime.fromisoformat(cached_data.get('timestamp', '2000-01-01'))
+                cache_age = (datetime.now() - cache_time).total_seconds()
+                
+                # If cache is fresh, return it immediately
+                if cache_age < 60:
+                    cached_data['_cached'] = True
+                    cached_data['_cache_age'] = int(cache_age)
+                    return cached_data
+                # Otherwise, we'll fetch fresh data but keep cache as fallback
+        except Exception as e:
+            print(f"[CACHE] Error reading landing cache: {e}")
+            cached_data = None
 
     indices_map = {
         "NIFTY 50": "^NSEI",
@@ -1190,37 +1459,180 @@ async def get_landing_data():
         for mode, pred in predictors.items():
             ml_status[mode] = "TRAINED" if pred.is_trained else "READY"
 
-        return {
+        result = {
             "timestamp": datetime.now().isoformat(),
-            "indices": indices_result,
-            "heatmap": heatmap_result,
+            "indices": clean_nan_values(indices_result),
+            "heatmap": clean_nan_values(heatmap_result),
             "api_keys": api_keys,
             "ml_models": ml_status,
             "system": {
                 "version": "2.0.0",
                 "status": "OPERATIONAL",
                 "uptime": "active",
-            }
+            },
+            "_cached": False
         }
+        
+        # Cache the result
+        try:
+            cache.set_landing_data(result)
+        except Exception as cache_err:
+            print(f"[CACHE] Error saving landing data: {cache_err}")
+        
+        return result
     except Exception as e:
         traceback.print_exc()
+        print(f"[LANDING] Live fetch failed: {e}")
+        
+        # Return stale cache data if available instead of empty data
+        if cached_data:
+            print("[LANDING] Returning stale cache data")
+            cached_data['_cached'] = True
+            cached_data['_stale'] = True
+            cached_data['system']['status'] = 'STALE_CACHE'
+            return cached_data
+        
+        # Last resort: return error response with empty data
         return {
             "timestamp": datetime.now().isoformat(),
             "indices": [],
             "heatmap": [],
             "api_keys": {},
             "ml_models": {},
-            "system": {"version": "2.0.0", "status": "ERROR", "error": str(e)}
+            "system": {"version": "2.0.0", "status": "ERROR", "error": str(e)},
+            "_error": "Failed to fetch live data and no cache available"
         }
 
 
+@app.get("/api/sparklines/personalized")
+async def get_personalized_sparkline_data(
+    force_refresh: bool = False,
+    current_user: SupabaseUser = Depends(get_current_user)
+):
+    """
+    Fetch intraday 5-minute price data for user's portfolio stocks.
+    Returns personalized sparklines based on user's holdings.
+    """
+    import concurrent.futures
+    
+    # Get user's portfolio stocks
+    from app.supabase_portfolio import get_user_portfolio_manager
+    portfolio_manager = get_user_portfolio_manager(current_user.id)
+    summary = portfolio_manager.get_portfolio_summary()
+    
+    user_positions = summary.get('positions', [])
+    
+    # If user has no positions, return empty
+    if not user_positions:
+        return {
+            "sparklines": [],
+            "timestamp": datetime.now().isoformat(),
+            "personalized": True,
+            "portfolio_setup": summary.get('is_setup', False),
+            "message": "No portfolio positions found" if summary.get('is_setup', False) else "Portfolio not set up"
+        }
+    
+    # Build list from user's positions
+    spark_symbols = []
+    for pos in user_positions[:6]:  # Max 6 sparklines
+        symbol = pos.get('symbol', '')
+        if symbol:
+            label = symbol.replace('.NS', '').replace('.BO', '')
+            spark_symbols.append((label, symbol))
+    
+    def _fetch_spark(label, sym):
+        try:
+            t = yf.Ticker(sym)
+            hist = t.history(period="1d", interval="5m")
+            if hist.empty:
+                return None
+            closes = [round(float(c), 2) for c in hist["Close"].dropna().tolist()]
+            if len(closes) < 3:
+                return None
+            last = closes[-1]
+            first = closes[0]
+            change_pct = round(((last - first) / first) * 100, 2) if first else 0
+            return {
+                "symbol": label,
+                "prices": closes,
+                "current": last,
+                "change_pct": change_pct,
+            }
+        except Exception:
+            return None
+    
+    try:
+        results = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+            futures = {pool.submit(_fetch_spark, lbl, sym): lbl for lbl, sym in spark_symbols}
+            for f in concurrent.futures.as_completed(futures):
+                r = f.result()
+                if r:
+                    results.append(r)
+        
+        from fastapi.responses import JSONResponse
+        
+        response_data = {
+            "sparklines": results,
+            "timestamp": datetime.now().isoformat(),
+            "personalized": True,
+            "portfolio_setup": True,
+        }
+        
+        # Return with cache-control headers
+        return JSONResponse(
+            content=response_data,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
+        
+    except Exception as e:
+        from fastapi.responses import JSONResponse
+        
+        return JSONResponse(
+            content={
+                "sparklines": [],
+                "timestamp": datetime.now().isoformat(),
+                "personalized": True,
+                "error": str(e),
+            },
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
+
+
 @app.get("/api/sparklines")
-async def get_sparkline_data():
+async def get_sparkline_data(force_refresh: bool = False):
     """
     Fetch intraday 5-minute price data for top stocks to render sparkline charts.
     Returns close price arrays for the last trading day.
+    Uses intelligent caching with stale-while-revalidate pattern.
     """
     import concurrent.futures
+    
+    # Check cache first
+    cached_data = None
+    if not force_refresh:
+        try:
+            cached_data = cache.get_sparklines()
+            if cached_data:
+                # Check if cache is fresh (less than 5 minutes old for sparklines)
+                cache_time = datetime.fromisoformat(cached_data.get('timestamp', '2000-01-01'))
+                cache_age = (datetime.now() - cache_time).total_seconds()
+                
+                if cache_age < 300:  # 5 minutes
+                    cached_data['_cached'] = True
+                    cached_data['_cache_age'] = int(cache_age)
+                    return cached_data
+        except Exception as e:
+            print(f"[CACHE] Error reading sparklines cache: {e}")
+            cached_data = None
 
     spark_symbols = [
         ("RELIANCE", "RELIANCE.NS"),
@@ -1260,9 +1672,27 @@ async def get_sparkline_data():
                 r = f.result()
                 if r:
                     results.append(r)
-        return {"sparklines": results, "timestamp": datetime.now().isoformat()}
+        
+        result = {"sparklines": results, "timestamp": datetime.now().isoformat(), "_cached": False}
+        
+        # Cache the result
+        try:
+            cache.set_sparklines(result)
+        except Exception as cache_err:
+            print(f"[CACHE] Error saving sparklines: {cache_err}")
+        
+        return result
     except Exception as e:
-        return {"sparklines": [], "timestamp": datetime.now().isoformat(), "error": str(e)}
+        print(f"[SPARKLINES] Live fetch failed: {e}")
+        
+        # Return stale cache if available
+        if cached_data:
+            print("[SPARKLINES] Returning stale cache data")
+            cached_data['_cached'] = True
+            cached_data['_stale'] = True
+            return cached_data
+        
+        return {"sparklines": [], "timestamp": datetime.now().isoformat(), "error": str(e), "_error": "Failed to fetch live data"}
 
 
 @app.get("/api/symbols")
@@ -1281,62 +1711,689 @@ async def get_popular_symbols():
     }
 
 @app.get("/api/fundamentals/{symbol}")
-async def get_fundamentals(symbol: str):
-    """Get fundamental analysis for a stock"""
+async def get_fundamentals(symbol: str, force_refresh: bool = False):
+    """Get fundamental analysis for a stock with intelligent caching"""
     try:
         from app.fundamental_analysis import FundamentalAnalyzer
         
+        # Check cache first
+        if not force_refresh:
+            cached_result = cache.get_fundamental(symbol)
+            if cached_result:
+                cached_result['_cached'] = True
+                return cached_result
+        
         analyzer = FundamentalAnalyzer(symbol)
-        result = analyzer.get_complete_fundamental_analysis()
+        result = analyzer.get_complete_fundamental_analysis(use_cache=False)
+        
+        # Cache the result
+        cache.set_fundamental(symbol, result)
+        result['_cached'] = False
+        
         return result
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fundamental analysis error: {str(e)}")
 
-# Portfolio Management Endpoints
+# Portfolio Management Endpoints - Supabase-based with per-user portfolios
+from app.supabase_portfolio import get_user_portfolio_manager
+
 @app.get("/api/portfolio/summary")
-async def get_portfolio_summary():
-    """Get complete portfolio summary with all positions and metrics"""
+async def get_portfolio_summary(current_user: SupabaseUser = Depends(get_current_user)):
+    """Get complete portfolio summary with real-time positions and metrics for the authenticated user"""
     try:
-        from app.portfolio_manager import portfolio_manager
-        
-        portfolio_manager.update_prices()
+        print(f"[PORTFOLIO API] Getting portfolio for user: {current_user.id}, email: {current_user.email}")
+        portfolio_manager = get_user_portfolio_manager(current_user.id)
+        print(f"[PORTFOLIO API] Portfolio manager created for user_id: {portfolio_manager.user_id}")
         summary = portfolio_manager.get_portfolio_summary()
-        metrics = portfolio_manager.get_performance_metrics()
+        recommendations = portfolio_manager.get_ai_recommendations()
         
         return {
             "portfolio": summary,
-            "metrics": metrics,
+            "ai_recommendations": recommendations,
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Portfolio error: {str(e)}")
 
 @app.post("/api/portfolio/buy")
-async def portfolio_buy(symbol: str, shares: int):
-    """Buy shares for portfolio"""
+async def portfolio_buy(
+    symbol: str,
+    shares: int,
+    price: Optional[float] = None,
+    sector: Optional[str] = None,
+    current_user: SupabaseUser = Depends(get_current_user)
+):
+    """Buy shares for user's portfolio"""
     try:
-        from app.portfolio_manager import portfolio_manager
-        
-        result = portfolio_manager.buy(symbol.upper(), shares)
+        portfolio_manager = get_user_portfolio_manager(current_user.id)
+        result = portfolio_manager.buy(symbol.upper(), shares, price, sector)
         if not result['success']:
             raise HTTPException(status_code=400, detail=result['error'])
         return result
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Buy error: {str(e)}")
 
 @app.post("/api/portfolio/sell")
-async def portfolio_sell(symbol: str, shares: int):
-    """Sell shares from portfolio"""
+async def portfolio_sell(
+    symbol: str,
+    shares: int,
+    price: Optional[float] = None,
+    current_user: SupabaseUser = Depends(get_current_user)
+):
+    """Sell shares from user's portfolio"""
     try:
-        from app.portfolio_manager import portfolio_manager
-        
-        result = portfolio_manager.sell(symbol.upper(), shares)
+        portfolio_manager = get_user_portfolio_manager(current_user.id)
+        result = portfolio_manager.sell(symbol.upper(), shares, price)
         if not result['success']:
             raise HTTPException(status_code=400, detail=result['error'])
         return result
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Sell error: {str(e)}")
+
+@app.get("/api/portfolio/recommendations")
+async def get_portfolio_recommendations(current_user: SupabaseUser = Depends(get_current_user)):
+    """Get AI-powered recommendations for user's portfolio"""
+    try:
+        portfolio_manager = get_user_portfolio_manager(current_user.id)
+        recommendations = portfolio_manager.get_ai_recommendations()
+        return {
+            "recommendations": recommendations,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Recommendations error: {str(e)}")
+
+# Portfolio Setup Endpoints
+class PortfolioSetupRequest(BaseModel):
+    cash_balance: float
+    holdings: List[Dict[str, Any]]
+    setup_complete: bool = True
+    risk_tolerance: Optional[str] = None  # low, medium, high
+    preferred_strategy: Optional[str] = None  # intraday, swing, long_term
+
+@app.post("/api/portfolio/setup")
+async def save_portfolio_setup(
+    setup_data: PortfolioSetupRequest,
+    current_user: SupabaseUser = Depends(get_current_user)
+):
+    """Save user's initial portfolio setup from onboarding"""
+    try:
+        from app.supabase_portfolio import get_user_portfolio_manager
+        from app.supabase_auth import supabase_admin
+        
+        portfolio_manager = get_user_portfolio_manager(current_user.id)
+        
+        # Update cash balance
+        portfolio_manager.cash = setup_data.cash_balance
+        portfolio_manager.initial_capital = setup_data.cash_balance + sum(h.get('qty', 0) * h.get('price', 0) for h in setup_data.holdings)
+        portfolio_manager._save_to_supabase()
+        
+        # Add each holding as a position
+        added_holdings = []
+        failed_holdings = []
+        print(f"[SETUP] Processing {len(setup_data.holdings)} holdings for user {current_user.id}")
+        
+        for holding in setup_data.holdings:
+            symbol = holding.get('symbol', '').upper().strip()
+            qty = holding.get('qty', 0)
+            price = holding.get('price', 0)
+            
+            # Normalize symbol - add .NS if no exchange suffix present
+            if symbol and '.' not in symbol:
+                symbol = f"{symbol}.NS"
+            
+            if symbol and qty > 0 and price > 0:
+                print(f"[SETUP] Buying {qty} shares of {symbol} at {price}")
+                result = portfolio_manager.buy(symbol, int(qty), float(price))
+                if result['success']:
+                    added_holdings.append({
+                        'symbol': symbol,
+                        'shares': qty,
+                        'avg_price': price
+                    })
+                    print(f"[SETUP] Successfully added {symbol}")
+                else:
+                    failed_holdings.append({'symbol': symbol, 'error': result.get('error', 'Unknown error')})
+                    print(f"[SETUP] Failed to add {symbol}: {result.get('error')}")
+            else:
+                if symbol:
+                    failed_holdings.append({'symbol': symbol, 'error': 'Invalid qty or price'})
+                    print(f"[SETUP] Skipping {symbol}: qty={qty}, price={price}")
+        
+        print(f"[SETUP] Completed: {len(added_holdings)} added, {len(failed_holdings)} failed")
+        
+        # Update profile with setup complete and preferences
+        try:
+            # Profiles table has: id, email, risk_tolerance, capital, preferred_strategy, created_at, updated_at
+            update_data = {
+                "updated_at": datetime.utcnow().isoformat(),
+                "capital": portfolio_manager.initial_capital
+            }
+            
+            if setup_data.risk_tolerance:
+                update_data["risk_tolerance"] = setup_data.risk_tolerance
+            if setup_data.preferred_strategy:
+                update_data["preferred_strategy"] = setup_data.preferred_strategy
+            
+            supabase_admin.table("profiles") \
+                .update(update_data) \
+                .eq("id", current_user.id) \
+                .execute()
+            
+            print(f"[SETUP] Profile updated with capital={portfolio_manager.initial_capital}")
+                    
+        except Exception as e:
+            print(f"[SETUP] Could not update profile: {e}")
+        
+        return {
+            "success": True,
+            "message": "Portfolio setup saved successfully",
+            "cash_balance": setup_data.cash_balance,
+            "holdings_added": len(added_holdings),
+            "holdings": added_holdings,
+            "holdings_failed": failed_holdings,
+            "total_value": portfolio_manager.cash + sum(pos.market_value for pos in portfolio_manager.positions.values()),
+            "positions_count": len(portfolio_manager.positions)
+        }
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Setup save error: {str(e)}")
+
+@app.get("/api/portfolio/setup")
+async def get_portfolio_setup(current_user: SupabaseUser = Depends(get_current_user)):
+    """Get user's portfolio setup status and summary"""
+    try:
+        from app.supabase_portfolio import get_user_portfolio_manager
+        from app.supabase_auth import supabase_admin
+        
+        # Check profile for preferences (profiles table has: id, email, risk_tolerance, capital, preferred_strategy, created_at, updated_at)
+        setup_complete = False
+        risk_tolerance = "medium"
+        preferred_strategy = "swing"
+        
+        try:
+            if supabase_admin:
+                profile_resp = supabase_admin.table("profiles") \
+                    .select("*") \
+                    .eq("id", current_user.id) \
+                    .execute()
+                if profile_resp.data:
+                    profile = profile_resp.data[0]
+                    # Setup is complete if user has capital set or has positions
+                    risk_tolerance = profile.get("risk_tolerance", "medium") or "medium"
+                    preferred_strategy = profile.get("preferred_strategy", "swing") or "swing"
+                    # If capital exists in profile, setup is considered complete
+                    if profile.get("capital") and profile.get("capital") > 0:
+                        setup_complete = True
+        except Exception as e:
+            print(f"[SETUP] Could not check profile: {e}")
+        
+        portfolio_manager = get_user_portfolio_manager(current_user.id)
+        summary = portfolio_manager.get_portfolio_summary()
+        
+        # Check is_setup flag from portfolio manager (this is the source of truth)
+        is_portfolio_setup = summary.get('is_setup', False)
+        
+        return {
+            "setup_complete": is_portfolio_setup,
+            "cash_balance": summary['cash'] if is_portfolio_setup else 0,
+            "total_value": summary['total_value'] if is_portfolio_setup else 0,
+            "positions_count": summary['positions_count'],
+            "positions": summary['positions'] if is_portfolio_setup else [],
+            "unrealized_pnl": summary['unrealized_pnl'] if is_portfolio_setup else 0,
+            "sector_allocation": summary.get('sector_allocation', {}) if is_portfolio_setup else {},
+            "risk_tolerance": risk_tolerance,
+            "preferred_strategy": preferred_strategy,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        # Return a safe default response instead of error - all zeros for new users
+        return {
+            "setup_complete": False,
+            "cash_balance": 0,
+            "total_value": 0,
+            "positions_count": 0,
+            "positions": [],
+            "unrealized_pnl": 0,
+            "sector_allocation": {},
+            "risk_tolerance": "medium",
+            "preferred_strategy": "swing",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e)
+        }
+
+# User Preferences Endpoints
+class UserPreferencesRequest(BaseModel):
+    risk_tolerance: str  # low, medium, high
+    preferred_strategy: str  # intraday, swing, long_term
+
+@app.post("/api/user/preferences")
+async def save_user_preferences(
+    prefs: UserPreferencesRequest,
+    current_user: SupabaseUser = Depends(get_current_user)
+):
+    """Save user trading preferences for personalized recommendations"""
+    try:
+        from app.supabase_auth import supabase_admin
+        
+        # Update user profile with preferences
+        result = supabase_admin.table("profiles") \
+            .update({
+                "risk_tolerance": prefs.risk_tolerance,
+                "preferred_strategy": prefs.preferred_strategy,
+                "updated_at": datetime.utcnow().isoformat()
+            }) \
+            .eq("id", current_user.id) \
+            .execute()
+        
+        return {
+            "success": True,
+            "message": "Preferences saved successfully",
+            "preferences": {
+                "risk_tolerance": prefs.risk_tolerance,
+                "preferred_strategy": prefs.preferred_strategy
+            }
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to save preferences: {str(e)}")
+
+@app.get("/api/user/preferences")
+async def get_user_preferences(
+    current_user: SupabaseUser = Depends(get_current_user)
+):
+    """Get user trading preferences"""
+    try:
+        from app.supabase_auth import supabase_admin
+        
+        # Profiles table has: id, email, risk_tolerance, capital, preferred_strategy, created_at, updated_at
+        result = supabase_admin.table("profiles") \
+            .select("risk_tolerance, preferred_strategy, capital") \
+            .eq("id", current_user.id) \
+            .execute()
+        
+        if result.data:
+            profile = result.data[0]
+            capital = profile.get("capital", 0) or 0
+            return {
+                "risk_tolerance": profile.get("risk_tolerance", "medium") or "medium",
+                "preferred_strategy": profile.get("preferred_strategy", "swing") or "swing",
+                "setup_complete": capital > 0,
+                "capital": capital,
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            return {
+                "risk_tolerance": "medium",
+                "preferred_strategy": "swing",
+                "setup_complete": False,
+                "capital": 0
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch preferences: {str(e)}")
+
+@app.get("/api/portfolio/stocks")
+async def get_available_stocks():
+    """Get list of available stocks for portfolio with current prices"""
+    try:
+        # Popular Indian stocks with sectors
+        stocks = [
+            {"symbol": "RELIANCE.NS", "name": "Reliance Industries", "sector": "Energy"},
+            {"symbol": "TCS.NS", "name": "Tata Consultancy Services", "sector": "Technology"},
+            {"symbol": "INFY.NS", "name": "Infosys", "sector": "Technology"},
+            {"symbol": "HDFCBANK.NS", "name": "HDFC Bank", "sector": "Financial"},
+            {"symbol": "ICICIBANK.NS", "name": "ICICI Bank", "sector": "Financial"},
+            {"symbol": "HINDUNILVR.NS", "name": "Hindustan Unilever", "sector": "Consumer"},
+            {"symbol": "SBIN.NS", "name": "State Bank of India", "sector": "Financial"},
+            {"symbol": "BHARTIARTL.NS", "name": "Bharti Airtel", "sector": "Telecom"},
+            {"symbol": "ITC.NS", "name": "ITC", "sector": "Consumer"},
+            {"symbol": "KOTAKBANK.NS", "name": "Kotak Mahindra Bank", "sector": "Financial"},
+            {"symbol": "LT.NS", "name": "Larsen & Toubro", "sector": "Industrial"},
+            {"symbol": "AXISBANK.NS", "name": "Axis Bank", "sector": "Financial"},
+            {"symbol": "ASIANPAINT.NS", "name": "Asian Paints", "sector": "Consumer"},
+            {"symbol": "MARUTI.NS", "name": "Maruti Suzuki", "sector": "Auto"},
+            {"symbol": "TITAN.NS", "name": "Titan Company", "sector": "Consumer"},
+            {"symbol": "SUNPHARMA.NS", "name": "Sun Pharmaceutical", "sector": "Healthcare"},
+            {"symbol": "BAJFINANCE.NS", "name": "Bajaj Finance", "sector": "Financial"},
+            {"symbol": "WIPRO.NS", "name": "Wipro", "sector": "Technology"},
+            {"symbol": "ULTRACEMCO.NS", "name": "UltraTech Cement", "sector": "Industrial"},
+            {"symbol": "NESTLEIND.NS", "name": "Nestle India", "sector": "Consumer"},
+        ]
+        
+        # Get current prices for all stocks (parallel fetch would be better)
+        import concurrent.futures
+        
+        def fetch_price(stock):
+            try:
+                import yfinance as yf
+                ticker = yf.Ticker(stock["symbol"])
+                data = ticker.history(period="1d")
+                if not data.empty:
+                    stock["current_price"] = round(float(data.iloc[-1]['Close']), 2)
+                    stock["day_change"] = round(float(data.iloc[-1]['Close'] - data.iloc[-1]['Open']), 2)
+                    stock["day_change_percent"] = round((stock["day_change"] / float(data.iloc[-1]['Open'])) * 100, 2) if data.iloc[-1]['Open'] != 0 else 0
+            except Exception as e:
+                stock["current_price"] = None
+                stock["error"] = str(e)
+            return stock
+        
+        # Fetch prices in parallel
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            stocks = list(executor.map(fetch_price, stocks))
+        
+        return {
+            "stocks": stocks,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching stocks: {str(e)}")
+
+# Enhanced Portfolio Endpoints for Daily P&L and Earnings
+@app.get("/api/portfolio/daily-pnl")
+async def get_daily_pnl(
+    days: int = Query(30, description="Number of days of history"),
+    current_user: SupabaseUser = Depends(get_current_user)
+):
+    """Get daily P&L history for the user's portfolio"""
+    try:
+        from app.supabase_auth import supabase_admin
+        
+        # Get transaction history to calculate daily P&L
+        transactions_response = supabase_admin.table("portfolio_transactions") \
+            .select("*") \
+            .eq("user_id", current_user.id) \
+            .order("timestamp", desc=True) \
+            .limit(200) \
+            .execute()
+        
+        transactions = transactions_response.data or []
+        
+        # Get current portfolio snapshot
+        portfolio_manager = get_user_portfolio_manager(current_user.id)
+        portfolio_summary = portfolio_manager.get_portfolio_summary()
+        
+        # Calculate daily P&L based on transactions and price changes
+        daily_pnl = []
+        today = datetime.now().date()
+        
+        # Initialize with current portfolio state
+        current_positions = {pos['symbol']: pos for pos in portfolio_summary['positions']}
+        
+        # Group transactions by date
+        from collections import defaultdict
+        transactions_by_date = defaultdict(list)
+        
+        for trans in transactions:
+            trans_date = datetime.fromisoformat(trans['timestamp'].replace('Z', '+00:00')).date()
+            transactions_by_date[trans_date].append(trans)
+        
+        # Calculate daily realized P&L from sell transactions
+        realized_pnl_by_date = defaultdict(float)
+        for trans in transactions:
+            if trans['transaction_type'] == 'SELL':
+                trans_date = datetime.fromisoformat(trans['timestamp'].replace('Z', '+00:00')).date()
+                # Calculate realized P&L: (sell_price - avg_buy_price) * shares
+                # We approximate using the transaction price and current avg cost
+                realized_pnl_by_date[trans_date] += trans.get('realized_pnl', 0) or 0
+        
+        # Generate last N days of data
+        for i in range(days):
+            date = today - timedelta(days=i)
+            date_str = date.isoformat()
+            
+            # Get day change from portfolio positions
+            day_realized_pnl = realized_pnl_by_date.get(date, 0)
+            
+            # Get unrealized day change
+            day_unrealized_pnl = 0
+            for pos in portfolio_summary['positions']:
+                try:
+                    ticker = yf.Ticker(pos['symbol'])
+                    hist = ticker.history(period="5d")
+                    if len(hist) >= 2:
+                        # Find the date in history
+                        for idx in range(len(hist)):
+                            hist_date = hist.index[idx].date()
+                            if hist_date == date and idx > 0:
+                                prev_close = hist.iloc[idx-1]['Close']
+                                curr_close = hist.iloc[idx]['Close']
+                                day_unrealized_pnl += (curr_close - prev_close) * pos['shares']
+                                break
+                except:
+                    pass
+            
+            daily_pnl.append({
+                'date': date_str,
+                'realized_pnl': round(day_realized_pnl, 2),
+                'unrealized_pnl': round(day_unrealized_pnl, 2),
+                'total_pnl': round(day_realized_pnl + day_unrealized_pnl, 2)
+            })
+        
+        # Calculate cumulative metrics
+        total_realized = sum(d['realized_pnl'] for d in daily_pnl)
+        total_unrealized = portfolio_summary.get('unrealized_pnl', 0)
+        
+        return {
+            'daily_history': daily_pnl,
+            'summary': {
+                'total_realized_pnl': round(total_realized, 2),
+                'total_unrealized_pnl': round(total_unrealized, 2),
+                'total_pnl': round(total_realized + total_unrealized, 2),
+                'best_day': max(daily_pnl, key=lambda x: x['total_pnl']) if daily_pnl else None,
+                'worst_day': min(daily_pnl, key=lambda x: x['total_pnl']) if daily_pnl else None,
+                'avg_daily_pnl': round(sum(d['total_pnl'] for d in daily_pnl) / len(daily_pnl), 2) if daily_pnl else 0
+            },
+            'timestamp': datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Daily P&L error: {str(e)}")
+
+@app.get("/api/portfolio/earnings-potential")
+async def get_earnings_potential(
+    current_user: SupabaseUser = Depends(get_current_user)
+):
+    """Calculate potential daily earnings based on portfolio positions and market opportunities"""
+    try:
+        portfolio_manager = get_user_portfolio_manager(current_user.id)
+        portfolio_summary = portfolio_manager.get_portfolio_summary()
+        
+        positions = portfolio_summary['positions']
+        total_potential = 0
+        position_opportunities = []
+        
+        for position in positions:
+            try:
+                symbol = position['symbol']
+                ticker = yf.Ticker(symbol)
+                
+                # Get historical data for analysis
+                hist = ticker.history(period="1mo")
+                if len(hist) < 5:
+                    continue
+                
+                current_price = position['current_price']
+                shares = position['shares']
+                
+                # Calculate volatility (ATR-based daily range expectation)
+                high_5d = hist['High'].tail(5).max()
+                low_5d = hist['Low'].tail(5).min()
+                avg_range = (high_5d - low_5d) / 5
+                
+                # Calculate average daily move percentage
+                daily_changes = hist['Close'].pct_change().dropna()
+                avg_daily_move_pct = abs(daily_changes.mean()) * 100
+                volatility = daily_changes.std() * 100
+                
+                # Potential upside calculation based on:
+                # 1. Recent momentum
+                # 2. Volatility
+                # 3. Support/resistance levels
+                recent_trend = (hist['Close'].iloc[-1] - hist['Close'].iloc[-5]) / hist['Close'].iloc[-5] * 100
+                
+                # Estimate potential daily gain (conservative: 50% of avg range)
+                potential_daily_gain = (avg_range * 0.5) * shares
+                potential_daily_gain_pct = (avg_daily_move_pct * 0.5)
+                
+                # Risk-adjusted potential
+                risk_score = min(volatility / 5, 2.0)  # Cap at 2x
+                adjusted_potential = potential_daily_gain / max(risk_score, 0.5)
+                
+                # Add to total
+                total_potential += adjusted_potential
+                
+                position_opportunities.append({
+                    'symbol': symbol,
+                    'current_price': round(current_price, 2),
+                    'shares': shares,
+                    'position_value': round(current_price * shares, 2),
+                    'potential_daily_gain': round(adjusted_potential, 2),
+                    'potential_gain_percent': round(potential_daily_gain_pct, 2),
+                    'avg_daily_range': round(avg_range, 2),
+                    'volatility': round(volatility, 2),
+                    'recent_trend': round(recent_trend, 2),
+                    'recommendation': 'HOLD' if abs(recent_trend) < 1 else ('BUY_OPPORTUNITY' if recent_trend > 2 else 'WATCH')
+                })
+                
+            except Exception as e:
+                print(f"[EARNINGS] Error analyzing {position.get('symbol', 'unknown')}: {e}")
+                continue
+        
+        # Sort by potential
+        position_opportunities.sort(key=lambda x: x['potential_daily_gain'], reverse=True)
+        
+        return {
+            'total_potential_daily_earnings': round(total_potential, 2),
+            'total_portfolio_value': portfolio_summary['total_value'],
+            'potential_return_percent': round((total_potential / portfolio_summary['total_value'] * 100) if portfolio_summary['total_value'] > 0 else 0, 2),
+            'opportunities': position_opportunities[:5],  # Top 5 opportunities
+            'analysis_date': datetime.now().isoformat(),
+            'disclaimer': 'Potential earnings are estimates based on historical volatility and market conditions. Actual results may vary.'
+        }
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Earnings potential error: {str(e)}")
+
+@app.get("/api/portfolio/performance-metrics")
+async def get_portfolio_performance_metrics(
+    current_user: SupabaseUser = Depends(get_current_user)
+):
+    """Get comprehensive portfolio performance metrics"""
+    try:
+        portfolio_manager = get_user_portfolio_manager(current_user.id)
+        portfolio_summary = portfolio_manager.get_portfolio_summary()
+        
+        positions = portfolio_summary['positions']
+        
+        if not positions:
+            return {
+                'message': 'No positions found. Add stocks to your portfolio to see performance metrics.',
+                'timestamp': datetime.now().isoformat()
+            }
+        
+        # Calculate metrics
+        total_value = portfolio_summary['total_value']
+        invested = portfolio_summary['invested']
+        cash = portfolio_summary['cash']
+        unrealized_pnl = portfolio_summary['unrealized_pnl']
+        
+        # Position metrics
+        winning_positions = [p for p in positions if p['unrealized_pnl'] > 0]
+        losing_positions = [p for p in positions if p['unrealized_pnl'] < 0]
+        
+        win_rate = len(winning_positions) / len(positions) * 100 if positions else 0
+        
+        # Calculate concentration risk (Herfindahl index)
+        weights = [p['weight'] / 100 for p in positions]
+        concentration_index = sum(w ** 2 for w in weights)
+        diversification_score = max(0, (1 - concentration_index) * 100)
+        
+        # Best and worst performers
+        sorted_by_pnl = sorted(positions, key=lambda x: x['unrealized_pnl'], reverse=True)
+        best_performer = sorted_by_pnl[0] if sorted_by_pnl else None
+        worst_performer = sorted_by_pnl[-1] if sorted_by_pnl else None
+        
+        # Sector analysis
+        sector_allocation = portfolio_summary.get('sector_allocation', {})
+        sector_concentration = max(sector_allocation.values()) if sector_allocation else 0
+        
+        # Calculate beta (market correlation approximation)
+        # Using NIFTY 50 as market proxy
+        try:
+            nifty = yf.Ticker('^NSEI')
+            nifty_hist = nifty.history(period="1mo")
+            
+            portfolio_returns = []
+            market_returns = nifty_hist['Close'].pct_change().dropna().tolist()
+            
+            # Approximate portfolio beta using position correlations
+            portfolio_beta = 1.0  # Default to market beta
+        except:
+            portfolio_beta = 1.0
+        
+        return {
+            'overall_metrics': {
+                'total_value': round(total_value, 2),
+                'total_invested': round(invested, 2),
+                'cash_balance': round(cash, 2),
+                'unrealized_pnl': round(unrealized_pnl, 2),
+                'unrealized_pnl_percent': round(portfolio_summary['unrealized_pnl_percent'], 2),
+                'day_change': round(portfolio_summary['day_change'], 2),
+                'day_change_percent': round(portfolio_summary['day_change_percent'], 2),
+                'total_return_percent': round(portfolio_summary['total_return'], 2)
+            },
+            'position_metrics': {
+                'total_positions': len(positions),
+                'winning_positions': len(winning_positions),
+                'losing_positions': len(losing_positions),
+                'win_rate_percent': round(win_rate, 2),
+                'avg_position_size': round(invested / len(positions), 2) if positions else 0,
+                'largest_position_weight': round(max(p['weight'] for p in positions), 2) if positions else 0
+            },
+            'risk_metrics': {
+                'diversification_score': round(diversification_score, 2),
+                'concentration_index': round(concentration_index, 3),
+                'sector_concentration_max': round(sector_concentration, 2),
+                'number_of_sectors': len(sector_allocation),
+                'portfolio_beta': round(portfolio_beta, 2)
+            },
+            'performance_leaders': {
+                'best_performer': {
+                    'symbol': best_performer['symbol'] if best_performer else None,
+                    'unrealized_pnl': round(best_performer['unrealized_pnl'], 2) if best_performer else None,
+                    'return_percent': round(best_performer['unrealized_pnl_percent'], 2) if best_performer else None
+                },
+                'worst_performer': {
+                    'symbol': worst_performer['symbol'] if worst_performer else None,
+                    'unrealized_pnl': round(worst_performer['unrealized_pnl'], 2) if worst_performer else None,
+                    'return_percent': round(worst_performer['unrealized_pnl_percent'], 2) if worst_performer else None
+                }
+            },
+            'sector_allocation': sector_allocation,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Performance metrics error: {str(e)}")
 
 # Backtesting Endpoints
 @app.post("/api/backtest", dependencies=[Depends(RateLimitBacktest)])
@@ -1463,7 +2520,7 @@ async def get_most_active(limit: int = 10):
 @app.get("/api/broker/intelligence/{symbol}", dependencies=[Depends(RateLimitProfessional)])
 async def broker_intelligence(
     symbol: str,
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Complete broker-level intelligence: dividends, earnings, analyst ratings, corporate actions"""
     try:
@@ -1493,7 +2550,7 @@ async def portfolio_tracker(
     shares: int = Query(...),
     entry_price: float = Query(...),
     current_price: Optional[float] = None,
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Track portfolio position P&L and metrics"""
     try:
@@ -1524,7 +2581,7 @@ async def portfolio_tracker(
 async def broker_recommendations(
     symbol: str,
     current_price: Optional[float] = None,
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Get professional broker-style buy/sell/hold recommendation with targets and stops"""
     try:
@@ -1576,11 +2633,16 @@ async def broker_recommendations(
 @app.get("/api/broker/news-impact/{symbol}", dependencies=[Depends(RateLimitProfessional)])
 async def news_impact_analysis(
     symbol: str,
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Analyze news sentiment impact and show which articles were analyzed"""
     try:
-        sentiment = sentiment_analyzer.get_sentiment_for_stock(symbol)
+        # Use async sentiment fetching to prevent server blocking
+        try:
+            sentiment = await sentiment_analyzer.get_sentiment_for_stock_async(symbol)
+        except Exception as e:
+            print(f"[SENTIMENT] Async fetch failed, using sync fallback: {e}")
+            sentiment = sentiment_analyzer.get_sentiment_for_stock(symbol, use_cache=True)
         
         # Get news articles from sentiment response
         news_articles = sentiment.get('news_articles', [])
@@ -1617,7 +2679,7 @@ async def news_impact_analysis(
 async def all_in_one_broker_solution(
     symbol: str,
     mode: str = Query("swing", description="Analysis mode: intraday, swing, longterm"),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """
     Complete all-in-one broker replacement solution
@@ -1645,7 +2707,7 @@ async def screen_stocks(
     dividend_yield_min: Optional[float] = Query(None, alias="dividend_yield", description="Dividend yield minimum: 0-10"),
     rsi_condition: Optional[str] = Query(None, description="RSI: oversold (<30), normal, overbought (>70)"),
     volume_condition: Optional[str] = Query(None, description="Volume: high (>5M), normal"),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """
     Screen stocks based on criteria using REAL yfinance data
@@ -1751,7 +2813,7 @@ async def screen_stocks(
 # ==================== MARKET DASHBOARD ====================
 @app.get("/api/market/dashboard", dependencies=[Depends(RateLimitDefault)])
 async def market_dashboard(
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Get REAL live market data - Nifty, Sensex, Sectors"""
     try:
@@ -1821,7 +2883,7 @@ async def market_dashboard(
 # ==================== ECONOMIC CALENDAR ====================
 @app.get("/api/calendar/events", dependencies=[Depends(RateLimitDefault)])
 async def economic_calendar(
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Get REAL Indian economic calendar events"""
     try:
@@ -1894,7 +2956,7 @@ async def economic_calendar(
 # ==================== DIVIDEND CALENDAR ====================
 @app.get("/api/dividends/calendar", dependencies=[Depends(RateLimitDefault)])
 async def dividend_calendar(
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """Get REAL dividend information for major stocks"""
     try:
@@ -1935,7 +2997,7 @@ async def dividend_calendar(
 
 @app.get("/api/data-sources/status")
 async def get_data_sources_status(
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """
     Get real-time data sources status and API configuration
@@ -2171,7 +3233,7 @@ async def get_data_sources_status(
 
 @app.get("/api/data-sources/news-realtime")
 async def get_news_realtime_status(
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
 ):
     """
     Get real-time news sentiment update status
@@ -2729,8 +3791,12 @@ async def analyze_personalized(
         else:
             indicators = ti.get_all_indicators_longterm()
 
-        # Get sentiment
-        sentiment_result = sentiment_analyzer.get_sentiment_for_stock(symbol)
+        # Get sentiment (async to prevent blocking)
+        try:
+            sentiment_result = await sentiment_analyzer.get_sentiment_for_stock_async(symbol)
+        except Exception as e:
+            print(f"[SENTIMENT] Async fetch failed, using fallback: {e}")
+            sentiment_result = sentiment_analyzer.get_sentiment_for_stock(symbol, use_cache=True)
         sentiment_score = sentiment_result.get('sentiment_score', 0)
 
         # Get ML prediction
@@ -3039,8 +4105,12 @@ async def personalized_analyze(
         # Get current price
         current_price = indicators.get('current_price', df['Close'].iloc[-1])
 
-        # Sentiment analysis
-        sentiment_result = sentiment_analyzer.get_sentiment_for_stock(symbol)
+        # Sentiment analysis (async to prevent blocking)
+        try:
+            sentiment_result = await sentiment_analyzer.get_sentiment_for_stock_async(symbol)
+        except Exception as e:
+            print(f"[SENTIMENT] Async fetch failed, using fallback: {e}")
+            sentiment_result = sentiment_analyzer.get_sentiment_for_stock(symbol, use_cache=True)
         sentiment_score = sentiment_result.get('sentiment_score', 0)
 
         # ML prediction
@@ -3305,25 +4375,40 @@ async def get_personalized_news(user_id: str):
             "articles": []
         }
 
-    # Fetch news for all symbols
+    # Fetch news for all symbols concurrently (async to prevent blocking)
     all_articles = []
-    for symbol in symbols[:5]:  # Limit to 5 symbols to avoid rate limits
+    
+    async def fetch_symbol_news(symbol):
+        """Fetch news for a single symbol"""
         try:
-            sentiment = sentiment_analyzer.get_sentiment_for_stock(symbol)
+            # Use async sentiment fetching
+            sentiment = await sentiment_analyzer.get_sentiment_for_stock_async(symbol)
             articles = sentiment.get('news_articles', [])
+            result = []
             for article in articles[:3]:  # Top 3 articles per symbol
                 if isinstance(article, dict):
-                    all_articles.append({
+                    result.append({
                         "symbol": symbol,
                         "title": article.get('title', 'No title'),
                         "source": article.get('source', 'Unknown'),
                         "url": article.get('url', ''),
                         "published_at": article.get('published_at', ''),
                         "impact_score": article.get('impact_score', 0),
-                        "impact_severity": article.get('impact_severity', 'Low')
+                        "impact_tier": article.get('impact_tier', 'LOW')
                     })
+            return result
         except Exception as e:
             print(f"[ERROR] Failed to fetch news for {symbol}: {e}")
+            return []
+    
+    # Run all fetches concurrently
+    news_tasks = [fetch_symbol_news(symbol) for symbol in symbols[:5]]  # Limit to 5 symbols
+    news_results = await asyncio.gather(*news_tasks, return_exceptions=True)
+    
+    # Flatten results
+    for result in news_results:
+        if isinstance(result, list):
+            all_articles.extend(result)
 
     # Sort by impact score
     all_articles.sort(key=lambda x: x.get('impact_score', 0), reverse=True)
@@ -3336,6 +4421,322 @@ async def get_personalized_news(user_id: str):
         "articles": all_articles[:15],  # Top 15 most impactful
         "timestamp": datetime.now().isoformat()
     }
+
+
+# ==================== QUANT TERMINAL V2 - DYNAMIC SYSTEM ====================
+
+# Import new v2 modules
+from app.agent_brain import get_agent_brain, AgentBrain, MarketRegime
+from app.nse_announcements import get_nse_parser, fetch_and_anouncements_for_user
+from app.shadow_market import get_shadow_engine, get_portfolio_shadow_analysis
+
+@app.get("/api/v2/system-state")
+async def get_dynamic_system_state(current_user: SupabaseUser = Depends(get_current_user)):
+    """
+    Get the complete dynamic system state for the user.
+    
+    Returns market regime, UI configuration, active alerts, and recommendations.
+    """
+    try:
+        # Get or create agent brain for user
+        brain = get_agent_brain(current_user.id)
+        
+        # Ensure monitoring is running
+        if not brain._running:
+            await brain.start_monitoring()
+            # Wait for initial data
+            await asyncio.sleep(1)
+        
+        # Get current state
+        state = brain.get_system_state()
+        
+        # Add recommendation constraints
+        constraints = brain.get_recommendation_constraints()
+        
+        return {
+            "market_context": state["market_context"],
+            "ui_configuration": state["ui_configuration"],
+            "active_alerts": state["alerts"],
+            "recommendation_constraints": constraints,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"System state error: {str(e)}")
+
+
+@app.post("/api/v2/acknowledge-alert/{alert_id}")
+async def acknowledge_alert(
+    alert_id: str,
+    current_user: SupabaseUser = Depends(get_current_user)
+):
+    """Acknowledge an alert by ID"""
+    try:
+        brain = get_agent_brain(current_user.id)
+        success = brain.acknowledge_alert(alert_id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Alert not found")
+        
+        return {"success": True, "message": "Alert acknowledged"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error acknowledging alert: {str(e)}")
+
+
+@app.get("/api/v2/nse-announcements")
+async def get_nse_announcements(
+    symbol: Optional[str] = Query(None, description="Filter by symbol"),
+    current_user: SupabaseUser = Depends(get_current_user)
+):
+    """
+    Get NSE corporate announcements with personalized impact analysis.
+    
+    Returns announcements with flash AI analysis and portfolio impact reports.
+    """
+    try:
+        # Fetch announcements
+        announcements = await fetch_and_anouncements_for_user(current_user.id)
+        
+        return {
+            "announcements": announcements,
+            "count": len(announcements),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Announcements error: {str(e)}")
+
+
+@app.get("/api/v2/shadow-market")
+async def get_shadow_market_analysis(current_user: SupabaseUser = Depends(get_current_user)):
+    """
+    Get Shadow Market analysis - cross-asset correlation with global drivers.
+    
+    Shows the "Invisible Strings" connecting global macro to your portfolio,
+    with predictive alerts 5-30 minutes ahead of price movements.
+    """
+    try:
+        # Get user portfolio
+        from app.supabase_portfolio import get_user_portfolio_manager
+        portfolio_manager = get_user_portfolio_manager(current_user.id)
+        summary = portfolio_manager.get_portfolio_summary()
+        positions = summary.get('positions', [])
+        
+        if not positions:
+            return {
+                "message": "No positions found. Add stocks to see shadow market analysis.",
+                "shadow_beta": 1.0,
+                "diversification_score": 0,
+                "macro_states": {},
+                "portfolio_exposures": [],
+                "active_shadow_alerts": [],
+                "invisible_strings": [],
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Get shadow market analysis
+        analysis = await get_portfolio_shadow_analysis(current_user.id, positions)
+        
+        return analysis
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Shadow market error: {str(e)}")
+
+
+@app.get("/api/v2/macro-drivers")
+async def get_macro_drivers_summary(
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
+):
+    """
+    Get summary of all global macro drivers (DXY, Oil, VIX, etc.)
+    
+    Returns current values, trends, and volatility for each driver.
+    """
+    try:
+        engine = get_shadow_engine()
+        
+        # Ensure monitoring is running
+        if not engine._running:
+            await engine.start_monitoring()
+            await asyncio.sleep(2)
+        
+        summary = engine.get_macro_summary()
+        
+        return {
+            "macro_drivers": summary,
+            "last_update": engine.last_update.isoformat(),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Macro drivers error: {str(e)}")
+
+
+# ==================== VERITAS AUDIT TRAIL API (v2) ====================
+
+from app.veritas_audit import get_audit_trail, SignalType, SignalSource
+
+@app.get("/api/v2/audit-trail")
+async def get_user_audit_trail(
+    limit: int = Query(50, description="Number of signals to return"),
+    signal_type: Optional[str] = Query(None, description="Filter by signal type (buy, sell, hold)"),
+    symbol: Optional[str] = Query(None, description="Filter by symbol"),
+    current_user: SupabaseUser = Depends(get_current_user)
+):
+    """
+    Get complete audit trail of AI-generated signals for the user.
+    
+    Returns signals with full evidence including:
+    - Technical indicator values
+    - News headlines that influenced decisions
+    - Historical pattern matches
+    - Verification hashes for integrity
+    """
+    try:
+        audit_trail = get_audit_trail(current_user.id)
+        
+        # Get recent signals
+        sig_type_enum = SignalType(signal_type.lower()) if signal_type else None
+        signals = audit_trail.get_recent_signals(limit=limit, signal_type=sig_type_enum)
+        
+        # Filter by symbol if provided
+        if symbol:
+            signals = [s for s in signals if s.get('symbol', '').upper() == symbol.upper()]
+        
+        return {
+            "signals": signals,
+            "count": len(signals),
+            "filters": {
+                "limit": limit,
+                "signal_type": signal_type,
+                "symbol": symbol
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Audit trail error: {str(e)}")
+
+
+@app.get("/api/v2/audit-trail/{signal_id}")
+async def get_signal_audit_detail(
+    signal_id: str,
+    current_user: SupabaseUser = Depends(get_current_user)
+):
+    """
+    Get detailed audit for a specific signal including complete evidence.
+    
+    Use this to verify signal integrity and understand the evidence
+    that led to an AI-generated recommendation.
+    """
+    try:
+        audit_trail = get_audit_trail(current_user.id)
+        
+        # Get specific signal audit
+        audit = audit_trail.get_signal_audit(signal_id)
+        
+        if not audit:
+            raise HTTPException(status_code=404, detail="Signal not found in audit trail")
+        
+        # Verify integrity
+        integrity_verified = audit_trail.verify_signal_integrity(signal_id)
+        
+        return {
+            "signal": audit,
+            "integrity_verified": integrity_verified,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Audit detail error: {str(e)}")
+
+
+@app.get("/api/v2/audit-stats")
+async def get_audit_statistics(
+    days: int = Query(30, description="Number of days to analyze"),
+    current_user: SupabaseUser = Depends(get_current_user)
+):
+    """
+    Get statistics about AI signal generation and performance.
+    
+    Returns signal counts by type, source, and average confidence scores.
+    """
+    try:
+        audit_trail = get_audit_trail(current_user.id)
+        
+        # Get all recent signals
+        signals = audit_trail.get_recent_signals(limit=1000)
+        
+        # Calculate statistics
+        from collections import defaultdict
+        
+        stats = {
+            "total_signals": len(signals),
+            "by_type": defaultdict(int),
+            "by_source": defaultdict(int),
+            "avg_confidence": 0,
+            "signals_with_evidence": 0
+        }
+        
+        confidences = []
+        for signal in signals:
+            stats["by_type"][signal.get("signal_type", "unknown")] += 1
+            stats["by_source"][signal.get("signal_source", "unknown")] += 1
+            
+            conf = signal.get("confidence", 0)
+            if conf:
+                confidences.append(conf)
+            
+            if signal.get("evidence"):
+                stats["signals_with_evidence"] += 1
+        
+        if confidences:
+            stats["avg_confidence"] = sum(confidences) / len(confidences)
+        
+        # Convert defaultdict to regular dict for JSON serialization
+        stats["by_type"] = dict(stats["by_type"])
+        stats["by_source"] = dict(stats["by_source"])
+        
+        return {
+            "statistics": stats,
+            "period_days": days,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Audit stats error: {str(e)}")
+
+
+# WebSocket endpoint for real-time updates (placeholder - would need full implementation)
+@app.websocket("/ws/v2/realtime")
+async def websocket_realtime(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time dynamic updates.
+    
+    Streams:
+    - Market regime changes
+    - Shadow market alerts
+    - NSE announcements
+    - Portfolio risk updates
+    """
+    await websocket.accept()
+    
+    try:
+        while True:
+            # In production, this would push real-time updates
+            # For now, echo back for testing
+            data = await websocket.receive_text()
+            await websocket.send_text(f"Echo: {data}")
+            
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        await websocket.close(code=1011, reason=str(e))
 
 
 # ==================== PERSONALIZED TRADING ASSISTANT (VERSION 2.0) ====================
@@ -3385,12 +4786,19 @@ async def personalized_analyze(
         else:
             indicators = ti.get_all_indicators_longterm()
 
-        # Sentiment analysis
+        # Sentiment analysis (async if not in fast mode)
         from app.sentiment import sentiment_analyzer
-        sentiment_result = sentiment_analyzer.get_sentiment_for_stock(symbol) if not fast else {
-            'sentiment_score': 0,
-            'sentiment_classification': 'Neutral'
-        }
+        if not fast:
+            try:
+                sentiment_result = await sentiment_analyzer.get_sentiment_for_stock_async(symbol)
+            except Exception as e:
+                print(f"[SENTIMENT] Async fetch failed, using cache: {e}")
+                sentiment_result = sentiment_analyzer.get_sentiment_for_stock(symbol, use_cache=True)
+        else:
+            sentiment_result = {
+                'sentiment_score': 0,
+                'sentiment_classification': 'Neutral'
+            }
 
         # ML prediction
         from app.ml_model import predictors
@@ -3895,4 +5303,213 @@ CREATE POLICY "Users can modify own alerts" ON alerts FOR ALL USING (auth.uid() 
             "4. Enable Email auth in Authentication settings"
         ]
     }
+
+# Stock Price Endpoint for Dashboard Watchlist
+@app.get("/api/scanner/stock-price")
+async def get_stock_price(symbol: str, use_cache: bool = True):
+    """Get real-time stock price for a symbol - used by dashboard watchlist"""
+    try:
+        # Check cache first
+        if use_cache:
+            cached_price = cache.get_stock_price(symbol.upper())
+            if cached_price:
+                cached_price['_cached'] = True
+                return cached_price
+        
+        import yfinance as yf
+        ticker = yf.Ticker(symbol.upper())
+        data = ticker.history(period="2d")
+        
+        if data.empty:
+            raise HTTPException(status_code=404, detail=f"No data found for {symbol}")
+        
+        current_price = float(data.iloc[-1]['Close'])
+        prev_close = float(data.iloc[-2]['Close']) if len(data) > 1 else current_price
+        change = current_price - prev_close
+        change_percent = (change / prev_close) * 100 if prev_close > 0 else 0
+        
+        result = {
+            "symbol": symbol.upper(),
+            "price": round(current_price, 2),
+            "change": round(change, 2),
+            "change_percent": round(change_percent, 2),
+            "prev_close": round(prev_close, 2),
+            "timestamp": datetime.now().isoformat(),
+            "_cached": False
+        }
+        
+        # Cache the result
+        if use_cache:
+            cache.set_stock_price(symbol.upper(), result)
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching price: {str(e)}")
+
+
+# ==================== CACHE MANAGEMENT ENDPOINTS ====================
+
+@app.get("/api/cache/stats")
+async def get_cache_statistics(
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
+):
+    """
+    Get cache statistics and performance metrics.
+    Shows memory cache and Redis statistics.
+    """
+    try:
+        stats = cache.get_cache_stats()
+        return {
+            "status": "success",
+            "timestamp": datetime.now().isoformat(),
+            "cache_statistics": stats,
+            "cache_ttl_configuration": cache.ttls
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting cache stats: {str(e)}")
+
+
+@app.post("/api/cache/invalidate")
+async def invalidate_cache(
+    pattern: str = Query("*", description="Cache key pattern to invalidate (e.g., 'price:RELIANCE*')"),
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
+):
+    """
+    Invalidate cache entries matching a pattern.
+    Use with caution - can impact performance if overused.
+    """
+    try:
+        deleted_count = cache.delete_pattern(pattern)
+        return {
+            "status": "success",
+            "message": f"Invalidated {deleted_count} cache entries",
+            "pattern": pattern,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error invalidating cache: {str(e)}")
+
+
+@app.post("/api/cache/warm")
+async def warm_cache(
+    symbols: List[str] = Query(
+        ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS"],
+        description="List of stock symbols to warm cache for"
+    ),
+    include_sentiment: bool = Query(True, description="Warm sentiment analysis cache"),
+    include_fundamental: bool = Query(False, description="Warm fundamental analysis cache"),
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
+):
+    """
+    Warm the cache by pre-fetching data for popular stocks.
+    This improves performance for frequently accessed stocks.
+    """
+    try:
+        import concurrent.futures
+        import asyncio
+        
+        results = {
+            "warmed_symbols": [],
+            "errors": [],
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        async def warm_symbol(symbol: str):
+            try:
+                # Warm price cache
+                ticker = yf.Ticker(symbol)
+                data = ticker.history(period="2d")
+                if not data.empty:
+                    current_price = float(data.iloc[-1]['Close'])
+                    prev_close = float(data.iloc[-2]['Close']) if len(data) > 1 else current_price
+                    change = current_price - prev_close
+                    change_percent = (change / prev_close) * 100 if prev_close > 0 else 0
+                    
+                    price_data = {
+                        "symbol": symbol.upper(),
+                        "price": round(current_price, 2),
+                        "change": round(change, 2),
+                        "change_percent": round(change_percent, 2),
+                        "prev_close": round(prev_close, 2),
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    cache.set_stock_price(symbol.upper(), price_data)
+                
+                # Warm sentiment cache if requested (async to prevent blocking)
+                if include_sentiment:
+                    try:
+                        sentiment_result = await sentiment_analyzer.get_sentiment_for_stock_async(symbol)
+                        if sentiment_result:
+                            cache.set_sentiment(symbol, sentiment_result)
+                    except Exception as e:
+                        results["errors"].append(f"{symbol} sentiment: {str(e)}")
+                
+                # Warm fundamental cache if requested
+                if include_fundamental:
+                    try:
+                        from app.fundamental_analysis import FundamentalAnalyzer
+                        analyzer = FundamentalAnalyzer(symbol)
+                        fundamental_result = analyzer.get_complete_fundamental_analysis(use_cache=False)
+                        if fundamental_result:
+                            cache.set_fundamental(symbol, fundamental_result)
+                    except Exception as e:
+                        results["errors"].append(f"{symbol} fundamental: {str(e)}")
+                
+                results["warmed_symbols"].append(symbol)
+                
+            except Exception as e:
+                results["errors"].append(f"{symbol}: {str(e)}")
+        
+        # Warm cache for all symbols concurrently
+        await asyncio.gather(*[warm_symbol(sym) for sym in symbols])
+        
+        return {
+            "status": "success",
+            "message": f"Warmed cache for {len(results['warmed_symbols'])} symbols",
+            "warmed_symbols": results["warmed_symbols"],
+            "error_count": len(results["errors"]),
+            "errors": results["errors"][:10],  # Limit errors shown
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error warming cache: {str(e)}")
+
+
+@app.get("/api/cache/warm-status")
+async def get_cache_warm_status(
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
+):
+    """
+    Check the warm status of popular stocks in cache.
+    """
+    try:
+        popular_stocks = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS", 
+                         "SBIN.NS", "BHARTIARTL.NS", "ITC.NS", "KOTAKBANK.NS", "LT.NS"]
+        
+        status = {}
+        for symbol in popular_stocks:
+            price_cached = cache.get_stock_price(symbol) is not None
+            sentiment_cached = cache.get_sentiment(symbol) is not None
+            fundamental_cached = cache.get_fundamental(symbol) is not None
+            
+            status[symbol] = {
+                "price_cached": price_cached,
+                "sentiment_cached": sentiment_cached,
+                "fundamental_cached": fundamental_cached,
+                "fully_cached": price_cached and sentiment_cached
+            }
+        
+        fully_cached_count = sum(1 for s in status.values() if s["fully_cached"])
+        
+        return {
+            "status": "success",
+            "timestamp": datetime.now().isoformat(),
+            "popular_stocks_cached": f"{fully_cached_count}/{len(popular_stocks)}",
+            "cache_coverage_percent": round((fully_cached_count / len(popular_stocks)) * 100, 1),
+            "stock_status": status
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error checking cache status: {str(e)}")
 

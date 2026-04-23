@@ -87,16 +87,23 @@ function getAnalysisElements() {
 }
 
 // Get fresh elements every time - don't cache
-const elements = getAnalysisElements();
+    const analysisElements = getAnalysisElements();
 /**
  * Logout user and redirect to landing page
  */
 function handleLogout() {
-    const AUTH_KEY = 'quant_terminal_user';
-    localStorage.removeItem(AUTH_KEY);
-    sessionStorage.removeItem(AUTH_KEY);
-    localStorage.removeItem('access_token');
-    window.location.href = '/';
+    // Use AuthSystem if available for proper logout
+    if (typeof AuthSystem !== 'undefined' && AuthSystem.logout) {
+        AuthSystem.logout();
+    } else {
+        // Fallback if AuthSystem not loaded
+        const AUTH_KEY = 'quant_terminal_user';
+        localStorage.removeItem(AUTH_KEY);
+        sessionStorage.removeItem(AUTH_KEY);
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        window.location.href = '/auth.html';
+    }
 }
 
 /**
@@ -648,17 +655,19 @@ async function loadPopularSymbols() {
 }
 // Render symbols list
 function renderSymbols(exchange) {
+    const els = getAnalysisElements();
     const symbols = popularSymbols[exchange] || [];
-    elements.symbolsList.innerHTML = symbols.map(symbol => `
+    if (!els.symbolsList) return;
+    els.symbolsList.innerHTML = symbols.map(symbol => `
         <div class="symbol-item" data-symbol="${symbol}">
             <span class="symbol-code">${symbol}</span>
             <span>Select →</span>
         </div>
     `).join('');
-    elements.symbolsList.querySelectorAll('.symbol-item').forEach(item => {
+    els.symbolsList.querySelectorAll('.symbol-item').forEach(item => {
         item.addEventListener('click', () => {
-            elements.symbolInput.value = item.dataset.symbol;
-            elements.symbolsModal.style.display = 'none';
+            if (els.symbolInput) els.symbolInput.value = item.dataset.symbol;
+            if (els.symbolsModal) els.symbolsModal.style.display = 'none';
         });
     });
 }
@@ -905,55 +914,73 @@ function displayResults(data) {
     var _a;
     console.log('[DISPLAY RESULTS] Received full data:', data);
     latestAnalysisData = data;
+    // Always get fresh elements
+    const els = getAnalysisElements();
     // Show results, hide empty state
-    elements.emptyState.style.display = 'none';
-    elements.resultsSection.style.display = 'block';
-    elements.resultsSection.classList.add('active');
+    if (els.emptyState) els.emptyState.style.display = 'none';
+    if (els.resultsSection) {
+        els.resultsSection.style.display = 'block';
+        els.resultsSection.classList.add('active');
+    }
     // Update price card
-    document.getElementById('result-symbol').textContent = data.symbol;
-    document.getElementById('result-mode').textContent = data.mode;
-    document.getElementById('result-price').textContent = data.current_price.toLocaleString('en-IN', {
+    const resultSymbol = document.getElementById('result-symbol');
+    const resultMode = document.getElementById('result-mode');
+    const resultPrice = document.getElementById('result-price');
+    const priceTimestamp = document.getElementById('price-timestamp');
+    if (resultSymbol) resultSymbol.textContent = data.symbol || '-';
+    if (resultMode) resultMode.textContent = data.mode || '-';
+    if (resultPrice) resultPrice.textContent = (data.current_price || 0).toLocaleString('en-IN', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
     });
-    document.getElementById('price-timestamp').textContent =
-        `Last updated: ${new Date(data.timestamp).toLocaleString('en-IN')}`;
+    if (priceTimestamp) priceTimestamp.textContent = `Last updated: ${new Date(data.timestamp).toLocaleString('en-IN')}`;
     // Update professional recommendation
     updateProfessionalRecommendation(data.professional_recommendation);
     // Update key metrics
-    document.getElementById('metric-trend').textContent = data.technical_analysis.basic.trend;
-    document.getElementById('metric-rsi').textContent =
-        `${data.technical_analysis.basic.rsi} (${data.technical_analysis.basic.rsi_interpretation})`;
-    document.getElementById('metric-ai').textContent = data.ai_prediction.ai_prediction || 'NEUTRAL';
-    document.getElementById('metric-risk').textContent = data.risk_management.basic.risk_level;
+    const metricTrend = document.getElementById('metric-trend');
+    const metricRsi = document.getElementById('metric-rsi');
+    const metricAi = document.getElementById('metric-ai');
+    const metricRisk = document.getElementById('metric-risk');
+    if (metricTrend) metricTrend.textContent = data.technical_analysis?.basic?.trend || '-';
+    if (metricRsi) metricRsi.textContent = `${data.technical_analysis?.basic?.rsi || '-'} (${data.technical_analysis?.basic?.rsi_interpretation || '-'})`;
+    if (metricAi) metricAi.textContent = data.ai_prediction?.ai_prediction || 'NEUTRAL';
+    if (metricRisk) metricRisk.textContent = data.risk_management?.basic?.risk_level || '-';
     // Update position sizing
-    updatePositionSizing((_a = data.risk_management.professional) === null || _a === void 0 ? void 0 : _a.position_sizing);
+    updatePositionSizing((_a = data.risk_management?.professional) === null || _a === void 0 ? void 0 : _a.position_sizing);
     // Update fundamental analysis
     updateFundamentalAnalysis(data.fundamental_analysis);
     // Update advanced indicators
-    updateAdvancedIndicators(data.technical_analysis.advanced);
+    updateAdvancedIndicators(data.technical_analysis?.advanced);
     // Update technical details
-    updateTechnicalDetails(data.technical_analysis.basic);
+    updateTechnicalDetails(data.technical_analysis?.basic);
     // Update risk details
     updateRiskDetails(data.risk_management);
     // Update Finnhub advanced insights
     updateFinnhubInsights(data.finnhub_insights, data.external_api_signal);
     // Update sentiment
     updateSentimentDetails(data.sentiment_analysis);
-    // Update institutional dashboard
+    // Update institutional dashboard - ensure it's visible
     console.log('[DISPLAY RESULTS] Checking broker_intelligence:', data.broker_intelligence);
+    const instDashboard = document.getElementById('institutional-dashboard');
+    if (instDashboard) {
+        instDashboard.style.display = 'block'; // Ensure visible
+    }
     if (data.broker_intelligence) {
         console.log('[DISPLAY RESULTS] Calling updateInstitutionalDashboard...');
         updateInstitutionalDashboard(data.broker_intelligence);
-    }
-    else {
+    } else {
         console.warn('[DISPLAY RESULTS] No broker_intelligence data found!');
+        if (instDashboard) {
+            instDashboard.innerHTML = '<h3>Institutional Dashboard</h3><p>No institutional data available for this symbol.</p>';
+        }
     }
     // Update chart
     updatePredictionChart(data.ai_prediction);
     updateAIPredictionTransparency(data.ai_prediction, data.sentiment_analysis, data.technical_analysis);
     // Scroll to results
-    elements.resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (els.resultsSection) {
+        els.resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
     // Start live refresh loops for news and alerts
     startLiveNewsUpdates(data.symbol);
     startLiveAlertsMonitoring(data.symbol);
@@ -1322,98 +1349,151 @@ function updateSentimentDetails(sentiment) {
 }
 // Update institutional dashboard with broker intelligence
 function updateInstitutionalDashboard(brokerIntel) {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f, _g;
     console.log('[INSTITUTIONAL DASHBOARD] Received data:', brokerIntel);
+    // Always get fresh element references
     const dashboardContainer = document.getElementById('institutional-dashboard');
     if (!dashboardContainer) {
         console.error('[INSTITUTIONAL DASHBOARD] Container not found');
         return;
     }
+    // Ensure dashboard is visible
+    dashboardContainer.style.display = 'block';
+    
     const kpiContainer = document.getElementById('kpi-metrics');
     const dashChartsContainer = document.getElementById('dashboard-charts');
-    if (!kpiContainer) {
-        console.error('[INSTITUTIONAL DASHBOARD] KPI container not found');
+    
+    // If containers don't exist, create them
+    if (!kpiContainer || !dashChartsContainer) {
+        dashboardContainer.innerHTML = `
+            <h3>Institutional Dashboard</h3>
+            <div id="kpi-metrics" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px;"></div>
+            <div id="dashboard-charts"></div>
+        `;
+    }
+    
+    const freshKpiContainer = document.getElementById('kpi-metrics');
+    const freshDashChartsContainer = document.getElementById('dashboard-charts');
+    
+    if (!freshKpiContainer) {
+        console.error('[INSTITUTIONAL DASHBOARD] KPI container not found even after recreation');
         return;
     }
-    if (!dashChartsContainer) {
-        console.error('[INSTITUTIONAL DASHBOARD] Charts container not found');
-        return;
-    }
+    
     console.log('[INSTITUTIONAL DASHBOARD] Containers found, populating data...');
-    // Extract broker data
-    const brokerRec = brokerIntel.broker_recommendation || {};
-    const analystConsensus = brokerIntel.analyst_consensus || {};
-    const dividends = brokerIntel.dividend_information || {};
-    const earnings = brokerIntel.earnings_information || {};
-    const sectorComp = brokerIntel.sector_comparison || {};
-    const newsAnalysis = brokerIntel.news_analysis || {};
+    
+    // Extract broker data with safe defaults
+    const brokerRec = brokerIntel?.broker_recommendation || {};
+    const analystConsensus = brokerIntel?.analyst_consensus || {};
+    const dividends = brokerIntel?.dividend_information || {};
+    const earnings = brokerIntel?.earnings_information || {};
+    const sectorComp = brokerIntel?.sector_comparison || {};
+    const newsAnalysis = brokerIntel?.news_analysis || {};
+    const corpActions = brokerIntel?.corporate_actions || {};
+    
     console.log('[INSTITUTIONAL DASHBOARD] Extracted data:', {
         brokerRec,
         analystConsensus,
         dividends,
         earnings,
         sectorComp,
-        newsAnalysis
+        newsAnalysis,
+        corpActions
     });
-    // Build KPI metrics
+    
+    // Helper for color coding
+    const getRecColor = (rec) => {
+        if (!rec) return '#f59e0b';
+        if (rec.includes('BUY')) return '#10b981';
+        if (rec.includes('SELL')) return '#ef4444';
+        return '#f59e0b';
+    };
+    
+    // Build KPI metrics with enhanced styling
     const kpiHtml = `
-        <div class="kpi-card">
-            <div class="kpi-label">Broker Recommendation</div>
-            <div class="kpi-value" style="color: ${brokerRec.recommendation && brokerRec.recommendation.includes('BUY') ? '#10b981' : brokerRec.recommendation && brokerRec.recommendation.includes('SELL') ? '#ef4444' : '#f59e0b'}">${brokerRec.recommendation || '-'}</div>
-            <div class="kpi-subtext">${brokerRec.conviction || brokerRec.risk_level || '-'}</div>
+        <div class="kpi-card" style="background: var(--bg-tertiary); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); text-align: center;">
+            <div class="kpi-label" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">Broker Recommendation</div>
+            <div class="kpi-value" style="font-size: 1.4rem; font-weight: 700; color: ${getRecColor(brokerRec.recommendation)}; margin-bottom: 4px;">${brokerRec.recommendation || '-'}</div>
+            <div class="kpi-subtext" style="font-size: 0.8rem; color: var(--text-secondary);">${brokerRec.conviction || brokerRec.risk_level || '-'}</div>
         </div>
-        <div class="kpi-card">
-            <div class="kpi-label">Analyst Rating</div>
-            <div class="kpi-value">${analystConsensus.consensus_rating || '-'}</div>
-            <div class="kpi-subtext">${analystConsensus.number_of_analysts || 0} analysts</div>
+        <div class="kpi-card" style="background: var(--bg-tertiary); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); text-align: center;">
+            <div class="kpi-label" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">Analyst Rating</div>
+            <div class="kpi-value" style="font-size: 1.4rem; font-weight: 700; color: var(--primary); margin-bottom: 4px;">${analystConsensus.consensus_rating || '-'}</div>
+            <div class="kpi-subtext" style="font-size: 0.8rem; color: var(--text-secondary);">${analystConsensus.number_of_analysts || 0} analysts</div>
         </div>
-        <div class="kpi-card">
-            <div class="kpi-label">Dividend Yield</div>
-            <div class="kpi-value">${dividends.dividend_yield ? dividends.dividend_yield.toFixed(2) + '%' : '-'}</div>
-            <div class="kpi-subtext">${dividends.last_dividend_date ? dividends.last_dividend_date.substring(0, 10) : '-'}</div>
+        <div class="kpi-card" style="background: var(--bg-tertiary); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); text-align: center;">
+            <div class="kpi-label" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">Dividend Yield</div>
+            <div class="kpi-value" style="font-size: 1.4rem; font-weight: 700; color: var(--primary); margin-bottom: 4px;">${dividends.dividend_yield ? dividends.dividend_yield.toFixed(2) + '%' : '-'}</div>
+            <div class="kpi-subtext" style="font-size: 0.8rem; color: var(--text-secondary);">${dividends.last_dividend_date ? dividends.last_dividend_date.substring(0, 10) : '-'}</div>
         </div>
-        <div class="kpi-card">
-            <div class="kpi-label">Next Earnings</div>
-            <div class="kpi-value">${earnings.next_earnings_date ? earnings.next_earnings_date.substring(0, 10) : '-'}</div>
-            <div class="kpi-subtext">PE: ${earnings.pe_ratio || '-'}</div>
+        <div class="kpi-card" style="background: var(--bg-tertiary); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); text-align: center;">
+            <div class="kpi-label" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">Next Earnings</div>
+            <div class="kpi-value" style="font-size: 1.4rem; font-weight: 700; color: var(--primary); margin-bottom: 4px;">${earnings.next_earnings_date ? earnings.next_earnings_date.substring(0, 10) : '-'}</div>
+            <div class="kpi-subtext" style="font-size: 0.8rem; color: var(--text-secondary);">PE: ${earnings.pe_ratio || '-'}</div>
         </div>
-        <div class="kpi-card">
-            <div class="kpi-label">Sector</div>
-            <div class="kpi-value">${sectorComp.sector || '-'}</div>
-            <div class="kpi-subtext">${sectorComp.industry || 'Unknown'}</div>
+        <div class="kpi-card" style="background: var(--bg-tertiary); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); text-align: center;">
+            <div class="kpi-label" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">Sector</div>
+            <div class="kpi-value" style="font-size: 1.4rem; font-weight: 700; color: var(--primary); margin-bottom: 4px;">${sectorComp.sector || '-'}</div>
+            <div class="kpi-subtext" style="font-size: 0.8rem; color: var(--text-secondary);">${sectorComp.industry || 'Unknown'}</div>
         </div>
-        <div class="kpi-card">
-            <div class="kpi-label">News Sentiment</div>
-            <div class="kpi-value" style="color: ${((_a = newsAnalysis.news_sentiment_distribution) === null || _a === void 0 ? void 0 : _a.positive) > ((_b = newsAnalysis.news_sentiment_distribution) === null || _b === void 0 ? void 0 : _b.negative) ? '#10b981' : '#ef4444'}">${newsAnalysis.total_articles || 0} articles</div>
-            <div class="kpi-subtext>${((_c = newsAnalysis.news_sentiment_distribution) === null || _c === void 0 ? void 0 : _c.positive) || 0}+ / ${((_d = newsAnalysis.news_sentiment_distribution) === null || _d === void 0 ? void 0 : _d.negative) || 0}-</div>
+        <div class="kpi-card" style="background: var(--bg-tertiary); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); text-align: center;">
+            <div class="kpi-label" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">News Sentiment</div>
+            <div class="kpi-value" style="font-size: 1.4rem; font-weight: 700; color: ${((_a = newsAnalysis.news_sentiment_distribution) === null || _a === void 0 ? void 0 : _a.positive) > ((_b = newsAnalysis.news_sentiment_distribution) === null || _b === void 0 ? void 0 : _b.negative) ? '#10b981' : '#ef4444'}; margin-bottom: 4px;">${newsAnalysis.total_articles || 0} articles</div>
+            <div class="kpi-subtext" style="font-size: 0.8rem; color: var(--text-secondary);">${((_c = newsAnalysis.news_sentiment_distribution) === null || _c === void 0 ? void 0 : _c.positive) || 0}+ / ${((_d = newsAnalysis.news_sentiment_distribution) === null || _d === void 0 ? void 0 : _d.negative) || 0}-</div>
         </div>
     `;
+    
     console.log('[INSTITUTIONAL DASHBOARD] Setting KPI HTML...');
-    kpiContainer.innerHTML = kpiHtml;
-    // Add basic dashboard insights
-    dashChartsContainer.innerHTML = `
-        <div style="padding: 20px; background: var(--bg-secondary); border-radius: var(--radius); margin-bottom: 16px;">
-            <h4 style="margin-bottom: 12px; color: var(--text-primary);">📊 Trading Insights</h4>
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
-                <div style="padding: 12px; background: var(--bg-tertiary); border-radius: 6px;">
-                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px;">Entry Point</div>
-                    <div style="font-size: 1.2rem; font-weight: 600; color: var(--primary);">₹${brokerRec.entry_point ? brokerRec.entry_point.toFixed(2) : '-'}</div>
+    freshKpiContainer.innerHTML = kpiHtml;
+    
+    // Add enhanced dashboard insights with corporate actions
+    if (freshDashChartsContainer) {
+        const hasSplits = corpActions?.stock_splits && corpActions.stock_splits.length > 0;
+        const hasDividends = corpActions?.recent_dividends && corpActions.recent_dividends.length > 0;
+        
+        freshDashChartsContainer.innerHTML = `
+            <div style="padding: 20px; background: var(--bg-secondary); border-radius: 12px; margin-bottom: 16px; border: 1px solid var(--border-color);">
+                <h4 style="margin-bottom: 16px; color: var(--text-primary); font-size: 1.1rem;">📊 Trading Insights</h4>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px;">
+                    <div style="padding: 16px; background: var(--bg-tertiary); border-radius: 8px; text-align: center;">
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">Entry Point</div>
+                        <div style="font-size: 1.4rem; font-weight: 600; color: var(--primary);">₹${brokerRec.entry_point ? brokerRec.entry_point.toFixed(2) : '-'}</div>
+                    </div>
+                    <div style="padding: 16px; background: var(--bg-tertiary); border-radius: 8px; text-align: center;">
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">Stop Loss</div>
+                        <div style="font-size: 1.4rem; font-weight: 600; color: #ef4444;">₹${brokerRec.stop_loss ? brokerRec.stop_loss.toFixed(2) : '-'}</div>
+                    </div>
+                    <div style="padding: 16px; background: var(--bg-tertiary); border-radius: 8px; text-align: center;">
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">Target 1</div>
+                        <div style="font-size: 1.4rem; font-weight: 600; color: #10b981;">₹${((_e = brokerRec.targets) === null || _e === void 0 ? void 0 : _e.target_1) ? brokerRec.targets.target_1.toFixed(2) : '-'}</div>
+                    </div>
+                    <div style="padding: 16px; background: var(--bg-tertiary); border-radius: 8px; text-align: center;">
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">Risk-Reward</div>
+                        <div style="font-size: 1.4rem; font-weight: 600; color: var(--primary);">1:${brokerRec.risk_reward_ratio || '-'}</div>
+                    </div>
                 </div>
-                <div style="padding: 12px; background: var(--bg-tertiary); border-radius: 6px;">
-                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px;">Stop Loss</div>
-                    <div style="font-size: 1.2rem; font-weight: 600; color: #ef4444;">₹${brokerRec.stop_loss ? brokerRec.stop_loss.toFixed(2) : '-'}</div>
-                </div>
-                <div style="padding: 12px; background: var(--bg-tertiary); border-radius: 6px;">
-                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px;">Target 1</div>
-                    <div style="font-size: 1.2rem; font-weight: 600; color: #10b981;">₹${((_e = brokerRec.targets) === null || _e === void 0 ? void 0 : _e.target_1) ? brokerRec.targets.target_1.toFixed(2) : '-'}</div>
-                </div>
-                <div style="padding: 12px; background: var(--bg-tertiary); border-radius: 6px;">
-                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px;">Risk-Reward</div>
-                    <div style="font-size: 1.2rem; font-weight: 600; color: var(--primary);">1:${brokerRec.risk_reward_ratio || '-'}</div>
-                </div>
+                
+                ${hasSplits || hasDividends ? `
+                    <div style="padding: 16px; background: rgba(245, 158, 11, 0.1); border-radius: 8px; border-left: 3px solid #f59e0b;">
+                        <h5 style="margin: 0 0 12px 0; color: #f59e0b; font-size: 1rem;">⚡ Recent Corporate Actions</h5>
+                        ${hasSplits ? `
+                            <div style="margin-bottom: 10px;">
+                                <strong style="color: var(--text-secondary);">Stock Splits:</strong>
+                                <span style="color: var(--text-primary);">${corpActions.stock_splits.slice(0, 2).join(', ')}</span>
+                            </div>
+                        ` : ''}
+                        ${hasDividends ? `
+                            <div>
+                                <strong style="color: var(--text-secondary);">Recent Dividends:</strong>
+                                <span style="color: var(--text-primary);">${corpActions.recent_dividends.slice(0, 2).join(', ')}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                ` : ''}
             </div>
-        </div>
-    `;
+        `;
+    }
+    
     console.log('[INSTITUTIONAL DASHBOARD] Dashboard populated successfully');
 }
 // Update prediction chart
@@ -1782,7 +1862,8 @@ function openArticleExternal() {
 // ============ ADVANCED AI FEATURES ============
 // LSTM Training & Prediction
 async function trainLSTM() {
-    const symbol = normalizeSymbol(elements.symbolInput.value);
+    const els = getAnalysisElements();
+    const symbol = normalizeSymbol(els.symbolInput ? els.symbolInput.value : '');
     if (!symbol) {
         showToast('Please enter a stock symbol', 'error');
         return;
@@ -1835,7 +1916,8 @@ async function trainLSTM() {
 }
 // Transformer Training & Prediction
 async function trainTransformer() {
-    const symbol = normalizeSymbol(elements.symbolInput.value);
+    const els = getAnalysisElements();
+    const symbol = normalizeSymbol(els.symbolInput ? els.symbolInput.value : '');
     if (!symbol) {
         showToast('Please enter a stock symbol', 'error');
         return;
@@ -1888,7 +1970,8 @@ async function trainTransformer() {
 }
 // Portfolio Optimization (RL)
 async function optimizePortfolio() {
-    const symbol = normalizeSymbol(elements.symbolInput.value);
+    const els = getAnalysisElements();
+    const symbol = normalizeSymbol(els.symbolInput ? els.symbolInput.value : '');
     if (!symbol) {
         showToast('Please enter a stock symbol', 'error');
         return;
@@ -1940,7 +2023,8 @@ async function optimizePortfolio() {
 }
 // Backtest RSI
 async function backtestRSI() {
-    const symbol = normalizeSymbol(elements.symbolInput.value);
+    const els = getAnalysisElements();
+    const symbol = normalizeSymbol(els.symbolInput ? els.symbolInput.value : '');
     if (!symbol) {
         showToast('Please enter a stock symbol', 'error');
         return;
@@ -1982,7 +2066,8 @@ async function backtestRSI() {
 // Backtest MACD
 async function backtestMACD() {
     var _a;
-    const symbol = normalizeSymbol(elements.symbolInput.value);
+    const els = getAnalysisElements();
+    const symbol = normalizeSymbol(els.symbolInput ? els.symbolInput.value : '');
     if (!symbol) {
         showToast('Please enter a stock symbol', 'error');
         return;
@@ -2167,7 +2252,9 @@ async function deleteAlert(alertId) {
 }
 async function explainPrediction() {
     var _a, _b, _c, _d;
-    const symbol = normalizeSymbol(elements.symbolInput.value);
+    // Always get fresh element reference
+    const els = getAnalysisElements();
+    const symbol = normalizeSymbol(els.symbolInput ? els.symbolInput.value : '');
     if (!symbol) {
         showToast('Please enter a stock symbol', 'error');
         return;
@@ -2182,7 +2269,7 @@ async function explainPrediction() {
     const rawPrediction = String(ai.ai_prediction || 'NEUTRAL').toUpperCase();
     const decisionMap = { UP: 'BUY', DOWN: 'SELL', NEUTRAL: 'HOLD' };
     const decision = decisionMap[rawPrediction] || rawPrediction;
-    const rawAiConfidence = String((_b = ai.confidence) !== null && _b !== void 0 ? _b : '50').trim();
+    const rawAiConfidence = String((_b = ai.confidence) !== null && _b === void 0 ? void 0 : '50').trim();
     const parsedAiConfidence = Number(rawAiConfidence.replace('%', ''));
     const confidence = Number.isFinite(parsedAiConfidence)
         ? (parsedAiConfidence <= 1 ? parsedAiConfidence * 100 : parsedAiConfidence)
@@ -2201,6 +2288,12 @@ async function explainPrediction() {
         finnhub_insights: latestAnalysisData.finnhub_insights || {}
     };
     const container = document.getElementById('explainability');
+    if (!container) {
+        showToast('Explainability container not found', 'error');
+        return;
+    }
+    // Show loading state
+    container.innerHTML = '<div style="padding: 20px; text-align: center;">⏳ Generating professional explanation with geopolitical analysis...</div>';
     try {
         const params = new URLSearchParams({
             symbol,
@@ -2224,69 +2317,101 @@ async function explainPrediction() {
         const geoChannels = geoReport.transmission_channels || [];
         const geoScenarios = geoReport.scenario_matrix || [];
         const stockView = geoReport.stock_specific_view || [];
+        // ENHANCED GEOPOLITICAL DISPLAY
         container.innerHTML = `
-            <div class="explainability-pro-card">
-                <div class="explainability-header">
-                    <h4>${escapeHtml(data.decision)} (${confidencePercent.toFixed(0)}% confidence)</h4>
-                    <div class="explainability-subtitle">Professional rationale combining technical, sentiment, AI pathing, and geopolitical risk channels.</div>
+            <div class="explainability-pro-card" style="background: var(--bg-secondary); border-radius: var(--radius); padding: 24px; margin-top: 16px;">
+                <div class="explainability-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 16px; margin-bottom: 20px;">
+                    <h4 style="color: var(--primary); margin: 0 0 8px 0; font-size: 1.3rem;">${escapeHtml(data.decision)} (${confidencePercent.toFixed(0)}% confidence)</h4>
+                    <div class="explainability-subtitle" style="color: var(--text-secondary); font-size: 0.95rem;">Professional rationale combining technical, sentiment, AI pathing, and comprehensive geopolitical risk analysis.</div>
                 </div>
 
-                <div class="explainability-section">
-                    <h5>Decision Note</h5>
-                    <p>${escapeHtml(data.detailed_explanation || data.explanation || 'Detailed explanation unavailable.')}</p>
+                <div class="explainability-section" style="margin-bottom: 24px;">
+                    <h5 style="color: var(--primary); margin-bottom: 12px; font-size: 1.1rem;">🎯 Decision Note</h5>
+                    <p style="line-height: 1.7; color: var(--text-primary);">${escapeHtml(data.detailed_explanation || data.explanation || 'Detailed explanation unavailable.')}</p>
                 </div>
 
                 ${data.graph_explanation ? `
-                    <div class="explainability-section">
-                        <h5>Why upcoming dates in the prediction graph look this way</h5>
-                        <p>${escapeHtml(data.graph_explanation)}</p>
+                    <div class="explainability-section" style="margin-bottom: 24px;">
+                        <h5 style="color: var(--primary); margin-bottom: 12px; font-size: 1.1rem;">📊 Prediction Graph Analysis</h5>
+                        <p style="line-height: 1.7; color: var(--text-secondary);">${escapeHtml(data.graph_explanation)}</p>
                     </div>
                 ` : ''}
 
                 ${(data.top_reasons || []).length ? `
-                    <div class="explainability-section">
-                        <h5>Top Drivers</h5>
-                        <ol>
+                    <div class="explainability-section" style="margin-bottom: 24px;">
+                        <h5 style="color: var(--primary); margin-bottom: 12px; font-size: 1.1rem;">🔝 Top Drivers</h5>
+                        <ol style="padding-left: 20px; line-height: 1.8; color: var(--text-primary);">
                             ${(data.top_reasons || []).map(r => `<li>${escapeHtml(r)}</li>`).join('')}
                         </ol>
                     </div>
                 ` : ''}
 
                 ${(geoDrivers.length || geoChannels.length || geoScenarios.length || stockView.length) ? `
-                    <div class="explainability-section">
-                        <h5>Professional Geopolitical Analysis</h5>
+                    <div class="explainability-section" style="margin-bottom: 24px; background: rgba(0, 212, 255, 0.05); border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 12px; padding: 20px;">
+                        <h5 style="color: var(--primary); margin-bottom: 16px; font-size: 1.2rem; display: flex; align-items: center; gap: 8px;">
+                            🌍 Comprehensive Geopolitical & Macro Analysis
+                        </h5>
+                        
                         ${geoDrivers.length ? `
-                            <div class="explainability-block-title">Macro Drivers</div>
-                            <ul>${geoDrivers.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
-                        ` : ''}
-                        ${geoChannels.length ? `
-                            <div class="explainability-block-title">Transmission Channels</div>
-                            <ul>${geoChannels.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
-                        ` : ''}
-                        ${geoScenarios.length ? `
-                            <div class="explainability-block-title">Scenario Matrix</div>
-                            <div class="explainability-scenario-grid">
-                                ${geoScenarios.map(sc => `
-                                    <div class="explainability-scenario-item">
-                                        <strong>${escapeHtml(sc.scenario || 'Scenario')}</strong>
-                                        <div><span>Probability:</span> ${escapeHtml(sc.probability || '-')}</div>
-                                        <div><span>Implication:</span> ${escapeHtml(sc.implication || '-')}</div>
-                                        <div><span>Positioning:</span> ${escapeHtml(sc.positioning || '-')}</div>
-                                    </div>
-                                `).join('')}
+                            <div style="margin-bottom: 20px;">
+                                <div class="explainability-block-title" style="font-weight: 600; color: var(--primary); margin-bottom: 10px; font-size: 1rem;">📈 Macro Drivers</div>
+                                <ul style="padding-left: 20px; line-height: 1.8; color: var(--text-primary);">
+                                    ${geoDrivers.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+                                </ul>
                             </div>
                         ` : ''}
+                        
+                        ${geoChannels.length ? `
+                            <div style="margin-bottom: 20px;">
+                                <div class="explainability-block-title" style="font-weight: 600; color: var(--primary); margin-bottom: 10px; font-size: 1rem;">🔄 Risk Transmission Channels</div>
+                                <ul style="padding-left: 20px; line-height: 1.8; color: var(--text-primary);">
+                                    ${geoChannels.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                        
+                        ${geoScenarios.length ? `
+                            <div style="margin-bottom: 20px;">
+                                <div class="explainability-block-title" style="font-weight: 600; color: var(--primary); margin-bottom: 12px; font-size: 1rem;">🎲 Scenario Matrix</div>
+                                <div class="explainability-scenario-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+                                    ${geoScenarios.map(sc => `
+                                        <div class="explainability-scenario-item" style="background: var(--bg-tertiary); padding: 16px; border-radius: 8px; border-left: 4px solid var(--primary);">
+                                            <strong style="color: var(--primary); display: block; margin-bottom: 8px;">${escapeHtml(sc.scenario || 'Scenario')}</strong>
+                                            <div style="margin-bottom: 6px; color: var(--text-secondary);"><span style="color: var(--text-muted);">Probability:</span> ${escapeHtml(sc.probability || '-')}</div>
+                                            <div style="margin-bottom: 6px; color: var(--text-secondary);"><span style="color: var(--text-muted);">Implication:</span> ${escapeHtml(sc.implication || '-')}</div>
+                                            <div style="color: var(--text-secondary);"><span style="color: var(--text-muted);">Positioning:</span> ${escapeHtml(sc.positioning || '-')}</div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                        
                         ${stockView.length ? `
-                            <div class="explainability-block-title">Stock-Specific Geopolitical View</div>
-                            <ul>${stockView.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+                            <div style="margin-bottom: 16px;">
+                                <div class="explainability-block-title" style="font-weight: 600; color: var(--primary); margin-bottom: 10px; font-size: 1rem;">🏢 Stock-Specific Geopolitical View</div>
+                                <ul style="padding-left: 20px; line-height: 1.8; color: var(--text-primary);">
+                                    ${stockView.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+
+                        ${data.geopolitical_analysis?.length ? `
+                            <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color);">
+                                <div class="explainability-block-title" style="font-weight: 600; color: var(--primary); margin-bottom: 10px; font-size: 1rem;">📰 Geopolitical Analysis Summary</div>
+                                <ul style="padding-left: 20px; line-height: 1.8; color: var(--text-primary);">
+                                    ${data.geopolitical_analysis.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+                                </ul>
+                            </div>
                         ` : ''}
                     </div>
-                ` : ''}
+                ` : '<div style="padding: 16px; background: rgba(245, 158, 11, 0.1); border-radius: 8px; color: var(--text-secondary);">No detailed geopolitical data available for this analysis.</div>'}
             </div>
         `;
-        showToast('✅ Explanation generated', 'success');
+        showToast('✅ Professional explanation generated', 'success');
     }
     catch (error) {
+        console.error('Explainability error:', error);
+        container.innerHTML = `<div style="padding: 20px; color: #ef4444;">❌ Failed to generate explanation: ${escapeHtml(error.message)}</div>`;
         showToast(error.message, 'error');
     }
 }

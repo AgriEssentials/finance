@@ -23,7 +23,7 @@ import uvicorn
 
 if __name__ == "__main__":
     host = os.getenv("HOST", "0.0.0.0")
-    port = int(os.getenv("PORT", "8000"))
+    port = int(os.getenv("PORT", "8001"))
     workers = 1  # FORCED: Single worker only
     reload = os.getenv("APP_RELOAD", "false").lower() in {"1", "true", "yes"}
 

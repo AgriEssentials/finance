@@ -1,6 +1,7 @@
 """
 Fundamental Analysis Module
 Provides professional fundamental analysis metrics and ratios
+Includes intelligent caching for improved performance
 """
 
 import yfinance as yf
@@ -8,6 +9,22 @@ import pandas as pd
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 from datetime import datetime
+
+# Cache will be imported lazily to avoid circular imports
+CACHE_AVAILABLE = None
+cache = None
+
+def _get_cache():
+    """Lazy import cache to avoid circular imports"""
+    global CACHE_AVAILABLE, cache
+    if CACHE_AVAILABLE is None:
+        try:
+            from app.cache import cache as cache_instance
+            cache = cache_instance
+            CACHE_AVAILABLE = True
+        except ImportError:
+            CACHE_AVAILABLE = False
+    return cache if CACHE_AVAILABLE else None
 
 
 @dataclass
@@ -453,23 +470,46 @@ class FundamentalAnalyzer:
             'note': 'Peer comparison requires sector data from external API'
         }
     
-    def get_complete_fundamental_analysis(self) -> Dict[str, Any]:
+    def get_complete_fundamental_analysis(self, use_cache: bool = True) -> Dict[str, Any]:
         """
         Get complete fundamental analysis
+        Includes intelligent caching for improved performance.
+        
+        Args:
+            use_cache: Whether to use cache (default True)
         
         Returns:
             Comprehensive fundamental analysis
         """
+        # Check cache first
+        cache_instance = _get_cache()
+        if use_cache and cache_instance:
+            cached_result = cache_instance.get_fundamental(self.symbol)
+            if cached_result:
+                print(f"[FUNDAMENTAL CACHE] Cache hit for {self.symbol}")
+                cached_result['_cached'] = True
+                cached_result['_cached_at'] = datetime.now().isoformat()
+                return cached_result
+        
         metrics = self.get_fundamental_metrics()
         valuation = self.get_valuation_assessment(metrics)
         health = self.get_financial_health_score()
         summary = self.get_business_summary()
         
-        return {
+        result = {
             'symbol': self.symbol,
             'company_info': summary,
             'metrics': metrics,
             'valuation_assessment': valuation,
             'financial_health': health,
-            'analysis_timestamp': datetime.now().isoformat()
+            'analysis_timestamp': datetime.now().isoformat(),
+            '_cached': False
         }
+        
+        # Cache the result
+        cache_instance = _get_cache()
+        if use_cache and cache_instance:
+            cache_instance.set_fundamental(self.symbol, result)
+            print(f"[FUNDAMENTAL CACHE] Cached result for {self.symbol}")
+        
+        return result

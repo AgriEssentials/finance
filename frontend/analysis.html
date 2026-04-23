@@ -3,12 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Quant Analysis Terminal | AI Stock Analysis</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="stylesheet" href="/static/css/pro-theme.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        .user-dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+        .user-panel {
+            min-height: 220px;
+        }
+        .portfolio-val {
+            font-size: 2.2rem;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            color: var(--text-inverse);
+            margin-bottom: 4px;
+        }
+        @media(max-width: 1000px) {
+            .user-dashboard-grid { grid-template-columns: 1fr; }
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -21,32 +45,24 @@
                     <p>Professional Market Intelligence</p>
                 </div>
             </div>
+            <nav class="main-nav">
+                <a href="/" class="nav-link">Home</a>
+                <a href="/dashboard.html" class="nav-link">Dashboard</a>
+                <a href="/analysis.html" class="nav-link active">Analysis</a>
+                <a href="/portfolio.html" class="nav-link">Portfolio</a>
+                <a href="/audit-trail.html" class="nav-link">Veritas</a>
+            </nav>
             <div class="header-actions">
                 <div class="user-info" id="user-info">
                     <span class="user-name" id="user-name">Trader</span>
-                    <button class="logout-btn" id="logout-btn" title="Logout">🚪</button>
+                    <button class="nav-chip" id="logout-btn" style="border:none; cursor:pointer;" title="Logout">🚪 Logout</button>
                 </div>
-                <a href="/data-sources.html" class="data-sources-link">Data Sources</a>
+                <a href="/data-sources.html" class="nav-chip">Data Sources</a>
             </div>
         </header>
 
-        <!-- Disclaimer -->
-        <div class="disclaimer-banner">
-            <span>⚠</span>
-            <span><strong>Disclaimer:</strong> This tool is for educational purposes only and does not constitute financial advice. Stock market investments are subject to market risks.</span>
-        </div>
-
-        <!-- Live Market Ticker -->
-        <div class="market-ticker" id="live-ticker-bar">
-            <div class="ticker-item"><span>NIFTY 50</span><strong>--</strong></div>
-            <div class="ticker-item"><span>SENSEX</span><strong>--</strong></div>
-            <div class="ticker-item"><span>BANKNIFTY</span><strong>--</strong></div>
-            <div class="ticker-item"><span>INDIA VIX</span><strong>--</strong></div>
-            <div class="ticker-item"><span>Signal</span><strong>--</strong></div>
-        </div>
-
-        <!-- Analysis Terminal -->
-        <div class="analysis-terminal-header">
+        <!-- Analysis Terminal Header -->
+        <div class="analysis-terminal-header slide-up">
             <div class="terminal-info">
                 <div class="terminal-kicker">Quantitative Analysis Engine</div>
                 <h3>Professional Stock Analysis Terminal</h3>
@@ -68,228 +84,309 @@
             </div>
         </div>
 
+        <div class="personal-workspace slide-up">
+            <div class="user-dashboard-grid">
+                
+                <!-- Portfolio Summary -->
+                <div class="dashboard-panel user-panel box-glow">
+                    <div class="panel-header">
+                        <h3><span class="status-dot">●</span> AI MANAGED PORTFOLIO</h3>
+                        <a href="/portfolio.html" class="nav-chip" style="font-size: 0.7rem;">Manage</a>
+                    </div>
+                    <div class="panel-content" style="display: flex; flex-direction: column; justify-content: space-between; height: calc(100% - 40px);">
+                        <div>
+                            <div class="portfolio-val" id="portfolio-value">₹0.00</div>
+                            <div class="metric-value" id="portfolio-pnl">--</div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 8px; font-family: var(--font-mono);">
+                                <span id="portfolio-cash">Cash: --</span> | 
+                                <span id="portfolio-positions">Positions: --</span>
+                            </div>
+                        </div>
+                        <div style="margin-top: 15px;">
+                            <div style="display:flex; justify-content: space-between; margin-bottom:6px; font-size: 0.75rem; color: var(--text-muted);">
+                                <span>AI Risk Allocation</span>
+                                <strong id="risk-profile" style="color: var(--primary);">Loading...</strong>
+                            </div>
+                            <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; display: flex;">
+                                <div style="width: 75%; background: linear-gradient(90deg, var(--primary), var(--info)); height: 100%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Custom Watchlist -->
+                <div class="dashboard-panel user-panel box-glow">
+                    <div class="panel-header">
+                        <h3>PORTFOLIO HOLDINGS</h3>
+                    </div>
+                    <div class="panel-content dense-ob" id="portfolio-holdings" style="height: calc(100% - 40px);">
+                        <div class="ob-row"><span class="ob-cell">Loading...</span></div>
+                    </div>
+                </div>
+
+                <!-- Personal AI Signals -->
+                <div class="dashboard-panel user-panel box-glow">
+                    <div class="panel-header">
+                        <h3>PERSONAL AI ALERTS</h3>
+                    </div>
+                    <div class="panel-content terminal-font" id="ai-alerts" style="height: calc(100% - 40px); overflow-y: auto;">
+                        <p class="info">[SYS] Initializing personalized alerts...</p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
         <!-- Main Content -->
-        <div class="main-content">
+        <div class="main-content slide-up">
             <!-- Input Section -->
             <div class="input-section">
-                <div class="input-card">
-                    <h2>Analyze Stock</h2>
-
-                    <div class="form-group">
+                <div class="dashboard-panel box-glow" style="padding: 24px;">
+                    <h3>Analyze Stock</h3>
+                    <div class="form-group" style="margin-top: 20px;">
                         <label for="symbol">Stock Symbol</label>
-                        <div class="symbol-input-wrapper">
-                            <input type="text" id="symbol" class="symbol-input" placeholder="e.g., HDFCBANK.NS" value="RELIANCE.NS">
-                            <button class="popular-symbols-btn" id="popular-symbols-btn" title="Browse popular symbols">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-                                </svg>
-                            </button>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="symbol" class="symbol-input" placeholder="e.g., HDFCBANK.NS" value="RELIANCE.NS" style="flex: 1;">
+                            <button class="nav-chip" id="popular-symbols-btn" style="padding: 0 15px;">🔍</button>
                         </div>
-                        <p class="help-text">Format: SYMBOL.NS for NSE, SYMBOL.BO for BSE</p>
                     </div>
 
                     <div class="form-group">
-                        <label for="portfolio-value">Portfolio Value (INR)</label>
-                        <input type="number" id="portfolio-value" class="portfolio-input" value="1000000" min="10000" step="10000">
-                        <p class="help-text">Used for position sizing calculations</p>
+                        <label for="portfolio-value-input">Portfolio Value (INR)</label>
+                        <input type="number" id="portfolio-value-input" value="1000000" min="10000" step="10000">
                     </div>
 
                     <div class="form-group">
                         <label>Analysis Mode</label>
-                        <div class="mode-selector">
-                            <button class="mode-btn" data-mode="intraday">Intraday</button>
-                            <button class="mode-btn active" data-mode="swing">Swing</button>
-                            <button class="mode-btn" data-mode="longterm">Long-term</button>
+                        <div class="mode-selector" style="display: flex; gap: 8px; margin-top: 8px;">
+                            <button class="nav-chip mode-btn" data-mode="intraday">Intraday</button>
+                            <button class="nav-chip mode-btn active" data-mode="swing">Swing</button>
+                            <button class="nav-chip mode-btn" data-mode="longterm">Long-term</button>
                         </div>
-                        <p class="help-text mode-help"><span id="mode-description">Daily charts for 6 months - Best for medium-term trading</span></p>
                     </div>
 
-                    <button class="btn-primary analyze-btn" id="analyze-btn">
-                        <span class="btn-icon">🔍</span>
-                        <span class="btn-text">[ EXECUTE QUANTITATIVE ANALYSIS ]</span>
-                        <span class="btn-loader spinner" style="display: none;"></span>
+                    <button class="btn-primary" id="analyze-btn" style="width: 100%; margin-top: 20px; height: 50px; font-size: 1rem;">
+                        [ EXECUTE QUANTITATIVE ANALYSIS ]
                     </button>
                 </div>
             </div>
 
             <!-- Results Section -->
             <div class="results-section" id="results-section">
-                <div id="empty-state" class="empty-state">
-                    <div class="empty-icon">📊</div>
-                    <h3>Ready to Analyze</h3>
-                    <p>Enter a stock symbol and click "Execute Quantitative Analysis" to get technical, fundamental, sentiment, and AI-driven recommendations.</p>
+                <div id="empty-state" class="empty-state dashboard-panel box-glow" style="padding: 60px 20px;">
+                    <div style="font-size: 3rem; margin-bottom: 20px;">📊</div>
+                    <h3>Ready for Alpha Generation</h3>
+                    <p>Enter a symbol above to initiate institutional-grade analysis.</p>
                 </div>
 
-                <div id="analysis-content" style="display: block;">
-                    <!-- Price Card -->
-                    <div class="price-card">
-                        <div class="stock-info">
-                            <h2 id="result-symbol">-</h2>
-                            <span class="mode-badge" id="result-mode">-</span>
-                        </div>
-                        <div class="price-display">
-                            <span class="currency">INR</span>
-                            <div class="price" id="result-price">-</div>
-                            <div class="timestamp" id="price-timestamp">Last updated: -</div>
+                <div id="analysis-content" style="display: none;">
+                    <!-- Recommendation Dashboard -->
+                    <div class="dashboard-panel box-glow" style="margin-bottom: 24px;">
+                        <div id="professional-banner" class="professional-banner" style="padding: 30px;">
+                             <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 20px;">
+                                <div>
+                                    <h2 id="result-symbol" style="font-size: 3rem; font-weight: 800; letter-spacing: -2px;">-</h2>
+                                    <div id="recommendation-action" class="recommendation-action" style="font-family: var(--font-mono); color: var(--primary);">Awaiting analysis...</div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div id="result-price" style="font-size: 2.5rem; font-weight: 700; color: var(--text-inverse);">₹0.00</div>
+                                    <div id="price-timestamp" style="font-size: 0.8rem; color: var(--text-muted);">Last updated: -</div>
+                                </div>
+                             </div>
+                             
+                             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px; margin-top: 40px; padding-top: 30px; border-top: 1px solid rgba(255,255,255,0.05);">
+                                <div class="metric-card">
+                                    <div class="metric-label">Composite Score</div>
+                                    <div id="composite-score" class="metric-value" style="font-size: 1.8rem;">-</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-label">Technical</div>
+                                    <div id="technical-score" class="metric-value">-</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-label">Fundamental</div>
+                                    <div id="fundamental-score" class="metric-value">-</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-label">Sentiment</div>
+                                    <div id="sentiment-score" class="metric-value">-</div>
+                                </div>
+                             </div>
                         </div>
                     </div>
 
-                    <!-- Professional Recommendation -->
-                    <div id="professional-banner" class="professional-banner">
-                        <div class="recommendation-header">
-                            <div>
-                                <h3 id="recommendation-title" class="recommendation-title">HOLD</h3>
-                                <div id="recommendation-action" class="recommendation-action">Awaiting analysis...</div>
+                    <!-- Metrics Quick Grid -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 24px;">
+                        <div class="dashboard-panel box-glow" style="padding: 20px;">
+                            <div class="metric-label">Market Trend</div>
+                            <div id="metric-trend" class="metric-value">-</div>
+                        </div>
+                        <div class="dashboard-panel box-glow" style="padding: 20px;">
+                            <div class="metric-label">Momentum (RSI)</div>
+                            <div id="metric-rsi" class="metric-value">-</div>
+                        </div>
+                        <div class="dashboard-panel box-glow" style="padding: 20px;">
+                            <div class="metric-label">AI Signal Consensus</div>
+                            <div id="metric-ai" class="metric-value">-</div>
+                        </div>
+                        <div class="dashboard-panel box-glow" style="padding: 20px;">
+                            <div class="metric-label">Risk Profile</div>
+                            <div id="metric-risk" class="metric-value">-</div>
+                        </div>
+                    </div>
+
+                    <!-- Layout: Cards Grid -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
+                         <!-- Reasoning -->
+                         <div id="reasoning-card" class="dashboard-panel box-glow" style="display: none;">
+                            <div class="panel-header"><h3>AI REASONING ENGINE</h3></div>
+                            <div class="panel-content" id="reasoning-content" style="line-height: 1.7; color: var(--text-secondary);"></div>
+                         </div>
+
+                         <!-- Position Sizing -->
+                         <div class="dashboard-panel box-glow">
+                             <div class="panel-header"><h3>POSITION SIZING ARCHITECT</h3></div>
+                             <div class="panel-content">
+                                 <div class="position-sizing-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                    <div class="metric-card">
+                                        <div class="metric-label">Recommended Shares</div>
+                                        <div id="recommended-shares" class="metric-value">-</div>
+                                    </div>
+                                    <div class="metric-card">
+                                        <div class="metric-label">Total Position Value</div>
+                                        <div id="position-value" class="metric-value">-</div>
+                                    </div>
+                                    <div class="metric-card">
+                                        <div class="metric-label">Portfolio Weighted %</div>
+                                        <div id="position-percent" class="metric-value">-</div>
+                                    </div>
+                                    <div class="metric-card">
+                                        <div class="metric-label">Stop-Loss Risk Amt</div>
+                                        <div id="risk-amount" class="metric-value">-</div>
+                                    </div>
+                                 </div>
+                             </div>
+                         </div>
+                    </div>
+
+                    <!-- Prediction Chart -->
+                    <div class="dashboard-panel box-glow" style="margin-bottom: 24px;">
+                        <div class="panel-header">
+                            <h3>AI PREDICTIVE MODELING</h3>
+                            <span class="tech-subtext">Neural Network Forecast</span>
+                        </div>
+                        <div class="panel-content chart-container" style="height: 400px; padding: 20px;">
+                            <canvas id="prediction-chart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Technical & Fundamental Details Row -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 24px;">
+                        <div class="dashboard-panel box-glow">
+                            <div class="panel-header"><h3>TECHNICAL INDICATORS</h3></div>
+                            <div class="panel-content" id="technical-details"></div>
+                        </div>
+                        <div class="dashboard-panel box-glow">
+                            <div class="panel-header"><h3>FUNDAMENTAL HEALTH</h3></div>
+                            <div class="panel-content">
+                                <div id="fundamental-metrics" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;"></div>
                             </div>
-                            <div class="recommendation-score">
-                                <div id="composite-score" class="score-value">-</div>
-                                <div class="score-label">Composite Score</div>
-                            </div>
                         </div>
-                        <div class="component-scores">
-                            <div class="component-item"><span class="component-label">Technical</span><span id="technical-score" class="component-value">-</span></div>
-                            <div class="component-item"><span class="component-label">Fundamental</span><span id="fundamental-score" class="component-value">-</span></div>
-                            <div class="component-item"><span class="component-label">Sentiment</span><span id="sentiment-score" class="component-value">-</span></div>
-                        </div>
-                    </div>
-
-                    <!-- Metrics Grid -->
-                    <div class="metrics-grid">
-                        <div class="metric-card"><div class="metric-label">Trend</div><div id="metric-trend" class="metric-value">-</div></div>
-                        <div class="metric-card"><div class="metric-label">RSI</div><div id="metric-rsi" class="metric-value">-</div></div>
-                        <div class="metric-card"><div class="metric-label">AI Signal</div><div id="metric-ai" class="metric-value">-</div></div>
-                        <div class="metric-card"><div class="metric-label">Risk</div><div id="metric-risk" class="metric-value">-</div></div>
-                    </div>
-
-                    <!-- AI Reasoning -->
-                    <div id="reasoning-card" class="analysis-card" style="display: none;">
-                        <h3>AI Reasoning</h3>
-                        <div id="reasoning-content"></div>
-                    </div>
-
-                    <!-- Position Sizing -->
-                    <div class="analysis-card">
-                        <h3>Position Sizing</h3>
-                        <div class="position-sizing-grid">
-                            <div class="sizing-item"><span class="sizing-label">Recommended Shares</span><span id="recommended-shares" class="sizing-value">-</span></div>
-                            <div class="sizing-item"><span class="sizing-label">Position Value</span><span id="position-value" class="sizing-value">-</span></div>
-                            <div class="sizing-item"><span class="sizing-label">Position %</span><span id="position-percent" class="sizing-value">-</span></div>
-                            <div class="sizing-item"><span class="sizing-label">Risk Amount</span><span id="risk-amount" class="sizing-value">-</span></div>
-                            <div class="sizing-item"><span class="sizing-label">Risk %</span><span id="risk-percent" class="sizing-value">-</span></div>
-                            <div class="sizing-item"><span class="sizing-label">Risk Reward</span><span id="risk-reward" class="sizing-value">-</span></div>
-                        </div>
-                    </div>
-
-                    <!-- Fundamental Analysis -->
-                    <div class="analysis-card">
-                        <h3>Fundamental Analysis</h3>
-                        <div class="fundamental-overview">
-                            <div class="fundamental-score-card">
-                                <div id="financial-health-score" class="score-circle">-</div>
-                                <div id="health-status" class="score-status">N/A</div>
-                            </div>
-                            <div id="fundamental-metrics" class="fundamental-metrics"></div>
-                        </div>
-                    </div>
-
-                    <!-- Advanced Indicators -->
-                    <div class="analysis-card">
-                        <h3>Advanced Indicators</h3>
-                        <div class="advanced-tabs">
-                            <button class="tab-btn active" data-tab="fibonacci">Fibonacci</button>
-                            <button class="tab-btn" data-tab="volume">Volume</button>
-                            <button class="tab-btn" data-tab="pivots">Pivots</button>
-                        </div>
-                        <div id="advanced-indicators-content"></div>
-                    </div>
-
-                    <!-- Technical Details -->
-                    <div class="analysis-card">
-                        <h3>Technical Details</h3>
-                        <div id="technical-details" class="details-grid"></div>
-                    </div>
-
-                    <!-- Risk Details -->
-                    <div class="analysis-card">
-                        <h3>Risk Details</h3>
-                        <div id="risk-details" class="details-grid"></div>
-                    </div>
-
-                    <!-- External API Signal -->
-                    <div id="finnhub-card" class="analysis-card" style="display: none;">
-                        <h3>External API Signal</h3>
-                        <div id="finnhub-insights" class="details-grid"></div>
-                    </div>
-
-                    <!-- Live News Analysis -->
-                    <div class="analysis-card">
-                        <h3>Live News Analysis</h3>
-                        <div id="news-sources"></div>
-                        <div id="sentiment-details" class="sentiment-breakdown"></div>
-                        <div id="news-articles"></div>
-                    </div>
-
-                    <!-- Institutional Dashboard -->
-                    <div id="institutional-dashboard" class="analysis-card">
-                        <h3>Institutional Dashboard</h3>
-                        <div id="kpi-metrics"></div>
-                        <div id="dashboard-charts"></div>
-                    </div>
-
-                    <!-- AI Prediction Chart -->
-                    <div class="analysis-card">
-                        <h3>AI Prediction Chart</h3>
-                        <div class="chart-description">Historical vs AI forecasted prices.</div>
-                        <div class="chart-container"><canvas id="prediction-chart"></canvas></div>
-                        <div id="ai-prediction-guide" class="ai-guide-box"></div>
-                        <div id="ai-transparency-details" class="ai-transparency-box"></div>
-                    </div>
-
-                    <!-- Advanced AI Features -->
-                    <div class="analysis-card">
-                        <h3>Advanced AI Features</h3>
-                        <div class="hero-actions" style="margin-top: 0;">
-                            <button id="lstm-train-btn" class="btn-secondary">Run LSTM Forecast</button>
-                            <button id="transformer-train-btn" class="btn-secondary">Run Transformer Forecast</button>
-                            <button id="portfolio-optimize-btn" class="btn-secondary">Optimize Now</button>
-                            <button id="explain-btn" class="btn-secondary">Get Explanation</button>
-                        </div>
-                        <div id="lstm-forecast" style="margin-top: 12px;"></div>
-                        <div id="transformer-forecast" style="margin-top: 12px;"></div>
-                        <div id="portfolio-optimization" style="margin-top: 12px;"></div>
-                        <div id="explainability" style="margin-top: 12px;"></div>
-                    </div>
-
-                    <!-- Backtesting Engine -->
-                    <div class="analysis-card">
-                        <h3>Backtesting Engine</h3>
-                        <div class="hero-actions" style="margin-top: 0;">
-                            <button id="backtest-rsi-btn" class="btn-secondary">Backtest RSI</button>
-                            <button id="backtest-macd-btn" class="btn-secondary">Backtest MACD</button>
-                        </div>
-                        <div id="backtest-results" style="margin-top: 12px;"></div>
-                    </div>
-
-                    <!-- Real-time Alerts -->
-                    <div class="analysis-card">
-                        <h3>Real-time Alerts</h3>
-                        <div class="details-grid">
-                            <input type="text" id="alert-symbol" placeholder="RELIANCE.NS">
-                            <select id="alert-type">
-                                <option value="price">Price Threshold</option>
-                                <option value="sentiment">Sentiment Change</option>
-                            </select>
-                            <input type="number" id="alert-threshold" placeholder="Enter threshold">
-                        </div>
-                        <div class="hero-actions" style="margin-top: 12px;">
-                            <button id="create-alert-btn" class="btn-secondary">Create Alert</button>
-                        </div>
-                        <div id="alerts-list" style="margin-top: 12px;"></div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="/static/js/auth.js?v=4"></script>
+    <script src="/static/js/analysis.js?v=4"></script>
+    
+    <script>
+        // Analysis Page Specific Portfolio Handlers
+        async function loadPersonalPortfolio() {
+            try {
+                const token = localStorage.getItem('access_token');
+                if (!token) return;
+                
+                const response = await fetch('/api/portfolio/setup', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error('API Error');
+                const data = await response.json();
+                
+                if (!data.setup_complete) {
+                    window.location.href = '/setup.html';
+                    return;
+                }
+                
+                // Update Values
+                document.getElementById('portfolio-value').textContent = '₹' + data.total_value.toLocaleString('en-IN', {minimumFractionDigits: 2});
+                const pnlEl = document.getElementById('portfolio-pnl');
+                const pnlClass = data.unrealized_pnl >= 0 ? 'positive' : 'negative';
+                pnlEl.className = 'metric-value ' + pnlClass;
+                pnlEl.textContent = (data.unrealized_pnl >= 0 ? '+' : '') + '₹' + data.unrealized_pnl.toLocaleString('en-IN');
+                
+                document.getElementById('portfolio-cash').textContent = `Cash: ₹${data.cash_balance.toLocaleString('en-IN')}`;
+                document.getElementById('portfolio-positions').textContent = `Positions: ${data.positions_count || 0}`;
+                
+                // Risk Profile
+                const riskEl = document.getElementById('risk-profile');
+                if (data.sector_allocation) {
+                    const sectors = Object.keys(data.sector_allocation).length;
+                    riskEl.textContent = sectors <= 2 ? 'Concentrated' : (sectors <= 4 ? 'Balanced' : 'Diversified');
+                }
+                
+                // Holdings
+                const holdingsEl = document.getElementById('portfolio-holdings');
+                if (data.positions && data.positions.length > 0) {
+                    holdingsEl.innerHTML = data.positions.slice(0, 8).map(pos => `
+                        <div class="ob-row">
+                            <span class="ob-cell" style="font-weight:600;">${pos.symbol.replace('.NS', '')}</span>
+                            <span class="ob-cell ob-vol">${pos.shares} sh</span>
+                            <span class="ob-cell ${pos.unrealized_pnl >= 0 ? 'positive' : 'negative'}" style="text-align:right">
+                                ${pos.unrealized_pnl_percent.toFixed(1)}%
+                            </span>
+                        </div>
+                    `).join('');
+                }
+                
+                loadAIRecommendations(token);
+                
+            } catch (error) {
+                console.warn('[ANALYSIS] Portfolio sync failed', error);
+            }
+        }
+        
+        async function loadAIRecommendations(token) {
+            try {
+                const response = await fetch('/api/portfolio/recommendations', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) return;
+                const data = await response.json();
+                const alertsEl = document.getElementById('ai-alerts');
+                
+                if (data.recommendations && data.recommendations.length > 0) {
+                    alertsEl.innerHTML = data.recommendations.map(rec => {
+                        let typeClass = rec.action.includes('STOP') ? 'warn' : (rec.action.includes('PROFIT') ? 'success' : 'info');
+                        return `<p class="${typeClass}" style="margin-bottom:12px; padding-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.05);">
+                            <strong>${rec.symbol.split('.')[0]}</strong>: ${rec.reason}
+                        </p>`;
+                    }).join('');
+                }
+            } catch (e) {}
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            loadPersonalPortfolio();
+            setInterval(loadPersonalPortfolio, 60000);
+        });
+    </script>
+</body>
+</html>
 
     <!-- Symbols Modal -->
     <div id="symbols-modal" class="modal" style="display: none;">
@@ -308,6 +405,150 @@
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script src="/static/js/analysis.js"></script>
+    <script src="/static/js/auth.js?v=4"></script>
+    <script src="/static/js/analysis.js?v=4"></script>
+    
+    <!-- Load Personal Portfolio Data -->
+    <script>
+        async function loadPersonalPortfolio() {
+            try {
+                const token = localStorage.getItem('access_token');
+                if (!token) {
+                    console.log('[DASHBOARD] No auth token, skipping portfolio load');
+                    return;
+                }
+                
+                // Fetch portfolio summary
+                const response = await fetch('/api/portfolio/setup', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch portfolio');
+                }
+                
+                const data = await response.json();
+                console.log('[DASHBOARD] Portfolio data:', data);
+                
+                // Check if setup is complete - if not, redirect to setup
+                if (!data.setup_complete) {
+                    console.log('[DASHBOARD] Setup not complete, redirecting to setup');
+                    window.location.href = '/setup.html';
+                    return;
+                }
+                
+                // Update portfolio value
+                const valueEl = document.getElementById('portfolio-value');
+                if (valueEl && data.total_value) {
+                    valueEl.textContent = '₹' + data.total_value.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                }
+                
+                // Update P&L
+                const pnlEl = document.getElementById('portfolio-pnl');
+                if (pnlEl && data.unrealized_pnl !== undefined) {
+                    const pnlClass = data.unrealized_pnl >= 0 ? 'positive' : 'negative';
+                    const pnlSign = data.unrealized_pnl >= 0 ? '+' : '';
+                    const pnlPercent = data.total_value > 0 ? ((data.unrealized_pnl / (data.total_value - data.unrealized_pnl)) * 100).toFixed(2) : 0;
+                    pnlEl.className = 'pnl-text ' + pnlClass;
+                    pnlEl.textContent = `${pnlSign}₹${data.unrealized_pnl.toLocaleString('en-IN')} (${pnlSign}${pnlPercent}%)`;
+                }
+                
+                // Update cash and positions
+                const cashEl = document.getElementById('portfolio-cash');
+                if (cashEl && data.cash_balance !== undefined) {
+                    cashEl.textContent = `Cash: ₹${data.cash_balance.toLocaleString('en-IN')}`;
+                }
+                
+                const positionsEl = document.getElementById('portfolio-positions');
+                if (positionsEl) {
+                    positionsEl.textContent = `Positions: ${data.positions_count || 0}`;
+                }
+                
+                // Update risk profile based on sector allocation
+                const riskEl = document.getElementById('risk-profile');
+                if (riskEl && data.sector_allocation) {
+                    const sectors = Object.keys(data.sector_allocation).length;
+                    if (sectors <= 2) {
+                        riskEl.textContent = 'Concentrated';
+                    } else if (sectors <= 4) {
+                        riskEl.textContent = 'Balanced';
+                    } else {
+                        riskEl.textContent = 'Diversified';
+                    }
+                }
+                
+                // Update holdings list
+                const holdingsEl = document.getElementById('portfolio-holdings');
+                if (holdingsEl && data.positions && data.positions.length > 0) {
+                    holdingsEl.innerHTML = data.positions.slice(0, 5).map(pos => {
+                        const pnlClass = pos.unrealized_pnl >= 0 ? 'ob-bid' : 'ob-ask';
+                        const pnlSign = pos.unrealized_pnl >= 0 ? '+' : '';
+                        return `<div class="ob-row">
+                            <span class="ob-cell">${pos.symbol.replace('.NS', '')}</span>
+                            <span class="ob-cell ob-vol">${pos.shares} sh</span>
+                            <span class="ob-cell ${pnlClass}" style="text-align:right">${pnlSign}${pos.unrealized_pnl_percent.toFixed(1)}%</span>
+                        </div>`;
+                    }).join('');
+                } else if (holdingsEl) {
+                    holdingsEl.innerHTML = '<div class="ob-row"><span class="ob-cell" style="color:var(--text-muted)">No holdings yet. <a href="/portfolio.html" style="color:var(--primary)">Add stocks →</a></span></div>';
+                }
+                
+                // Load AI recommendations
+                loadAIRecommendations(token);
+                
+            } catch (error) {
+                console.error('[DASHBOARD] Error loading portfolio:', error);
+                // Show setup prompt if no portfolio
+                const valueEl = document.getElementById('portfolio-value');
+                if (valueEl) {
+                    valueEl.innerHTML = '<a href="/setup.html" style="font-size: 0.9rem; color: var(--primary);">Setup Portfolio →</a>';
+                }
+            }
+        }
+        
+        async function loadAIRecommendations(token) {
+            try {
+                const response = await fetch('/api/portfolio/recommendations', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) return;
+                
+                const data = await response.json();
+                const alertsEl = document.getElementById('ai-alerts');
+                
+                if (alertsEl && data.recommendations && data.recommendations.length > 0) {
+                    alertsEl.innerHTML = data.recommendations.slice(0, 4).map(rec => {
+                        let typeClass = 'info';
+                        let prefix = '[AI]';
+                        if (rec.action === 'STOP_LOSS_ALERT') {
+                            typeClass = 'warn';
+                            prefix = '[RISK]';
+                        } else if (rec.action === 'CONSIDER_TAKING_PROFITS') {
+                            typeClass = 'success';
+                            prefix = '[PROFIT]';
+                        }
+                        return `<p class="${typeClass}">${prefix} ${rec.symbol.replace('.NS', '')}: ${rec.reason}</p>`;
+                    }).join('');
+                } else if (alertsEl) {
+                    alertsEl.innerHTML = '<p class="info">[SYS] No active alerts. Your portfolio looks healthy!</p>';
+                }
+            } catch (error) {
+                console.error('[DASHBOARD] Error loading recommendations:', error);
+            }
+        }
+        
+        // Load on page ready
+        document.addEventListener('DOMContentLoaded', () => {
+            loadPersonalPortfolio();
+            
+            // Refresh every 30 seconds
+            setInterval(loadPersonalPortfolio, 30000);
+        });
+    </script>
 </body>
 </html>

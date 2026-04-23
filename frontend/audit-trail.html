@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quant Terminal | Veritas Audit Trail</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <link rel="stylesheet" href="/static/css/style.css?v=2">
+    <link rel="stylesheet" href="/static/css/pro-theme.css?v=2">
+    <link rel="stylesheet" href="/static/css/dynamic-v2.css?v=2">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        .audit-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .audit-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .audit-header h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .audit-header h1::before {
+            content: "🔍";
+            font-size: 1.5rem;
+        }
+        
+        .audit-stats-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .stat-card .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        .stat-card .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+        
+        .audit-filters {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .audit-filters select,
+        .audit-filters input {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+        
+        .audit-filters button {
+            background: var(--primary);
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        
+        .signals-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .signal-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .signal-card:hover {
+            border-color: var(--primary);
+            transform: translateX(4px);
+        }
+        
+        .signal-card.verified {
+            border-left: 4px solid #00ff9d;
+        }
+        
+        .signal-card:not(.verified) {
+            border-left: 4px solid #ff6b6b;
+        }
+        
+        .signal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+        
+        .signal-symbol {
+            font-size: 1.3rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        .signal-type {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        
+        .signal-type.buy { background: rgba(0, 255, 157, 0.2); color: #00ff9d; }
+        .signal-type.sell { background: rgba(255, 107, 107, 0.2); color: #ff6b6b; }
+        .signal-type.hold { background: rgba(255, 184, 77, 0.2); color: #ffb84d; }
+        .signal-type.reduce { background: rgba(255, 107, 107, 0.2); color: #ff6b6b; }
+        .signal-type.avoid { background: rgba(128, 128, 128, 0.2); color: #888; }
+        
+        .signal-meta {
+            display: flex;
+            gap: 20px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+        
+        .signal-meta span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .confidence-bar {
+            height: 6px;
+            background: var(--bg-secondary);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+        
+        .confidence-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+        
+        .signal-evidence-preview {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        
+        .evidence-tag {
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            background: var(--bg-secondary);
+            border-radius: 6px;
+            color: var(--text-muted);
+        }
+        
+        /* Signal Detail Modal */
+        .signal-detail-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            overflow-y: auto;
+        }
+        
+        .signal-detail-modal.active {
+            display: block;
+        }
+        
+        .modal-content {
+            max-width: 900px;
+            margin: 40px auto;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 30px;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        
+        .evidence-section {
+            margin-bottom: 24px;
+        }
+        
+        .evidence-section h4 {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .technical-evidence {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 12px;
+        }
+        
+        .tech-item {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 12px;
+        }
+        
+        .tech-item .indicator-name {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+        
+        .tech-item .indicator-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+            margin-top: 4px;
+        }
+        
+        .news-evidence {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .news-item {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 16px;
+        }
+        
+        .news-item .headline {
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        
+        .news-item .meta {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            gap: 16px;
+        }
+        
+        .integrity-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        
+        .integrity-status.verified {
+            background: rgba(0, 255, 157, 0.1);
+            color: #00ff9d;
+        }
+        
+        .integrity-status:not(.verified) {
+            background: rgba(255, 107, 107, 0.1);
+            color: #ff6b6b;
+        }
+        
+        .loading-spinner {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+        
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="logo">
+            <div class="logo-icon">AI</div>
+            <div class="logo-text">
+                <h1>AI Quant Terminal</h1>
+                <p>Professional Market Intelligence</p>
+            </div>
+        </div>
+        <nav class="main-nav">
+            <a href="/">Home</a>
+            <a href="/dashboard.html">Dashboard</a>
+            <a href="/analysis.html">Analysis</a>
+            <a href="/portfolio.html">Portfolio</a>
+            <a href="/audit-trail.html" class="active">Veritas</a>
+        </nav>
+        <div class="header-actions">
+            <span id="user-name">Trader</span>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+    </header>
+
+    <div class="audit-container">
+        <div class="audit-header">
+            <h1>Veritas Audit Trail</h1>
+            <div class="integrity-status" id="system-integrity">
+                <span>⏳</span> Checking System Integrity...
+            </div>
+        </div>
+
+        <!-- Stats Bar -->
+        <div class="audit-stats-bar" id="stats-bar">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-total">-</div>
+                <div class="stat-label">Total Signals</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-confidence">-</div>
+                <div class="stat-label">Avg Confidence</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-buy">-</div>
+                <div class="stat-label">Buy Signals</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-sell">-</div>
+                <div class="stat-label">Sell Signals</div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="audit-filters">
+            <select id="filter-type">
+                <option value="">All Types</option>
+                <option value="buy">Buy</option>
+                <option value="sell">Sell</option>
+                <option value="hold">Hold</option>
+                <option value="reduce">Reduce</option>
+                <option value="avoid">Avoid</option>
+            </select>
+            <input type="text" id="filter-symbol" placeholder="Filter by symbol (e.g., RELIANCE)" />
+            <select id="filter-limit">
+                <option value="25">25 signals</option>
+                <option value="50" selected>50 signals</option>
+                <option value="100">100 signals</option>
+            </select>
+            <button onclick="loadAuditTrail()">Apply Filters</button>
+            <button onclick="refreshData()">🔄 Refresh</button>
+        </div>
+
+        <!-- Signals List -->
+        <div id="signals-container" class="signals-list">
+            <div class="loading-spinner">Loading audit trail...</div>
+        </div>
+    </div>
+
+    <!-- Signal Detail Modal -->
+    <div id="signal-modal" class="signal-detail-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Signal Details</h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="modal-body">
+                <!-- Dynamic content -->
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/auth.js?v=2"></script>
+    <script>
+        const API_BASE = '/api';
+        let currentSignals = [];
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                window.location.href = '/auth.html';
+                return;
+            }
+            
+            // Load user info
+            const userStr = sessionStorage.getItem('quant_terminal_user') || localStorage.getItem('quant_terminal_user');
+            if (userStr) {
+                try {
+                    const user = JSON.parse(userStr);
+                    document.getElementById('user-name').textContent = user.user?.name || user.user?.email || 'Trader';
+                } catch (e) {}
+            }
+            
+            // Load data
+            await Promise.all([
+                loadAuditStats(),
+                loadAuditTrail()
+            ]);
+        });
+
+        async function loadAuditStats() {
+            try {
+                const token = localStorage.getItem('access_token');
+                const response = await fetch(`${API_BASE}/v2/audit-stats`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load stats');
+                
+                const data = await response.json();
+                const stats = data.statistics;
+                
+                // Update stats display
+                document.getElementById('stat-total').textContent = stats.total_signals || 0;
+                document.getElementById('stat-confidence').textContent = 
+                    stats.avg_confidence ? (stats.avg_confidence * 100).toFixed(1) + '%' : '-';
+                document.getElementById('stat-buy').textContent = stats.by_type?.buy || 0;
+                document.getElementById('stat-sell').textContent = stats.by_type?.sell || 0;
+                
+            } catch (error) {
+                console.error('Error loading audit stats:', error);
+            }
+        }
+
+        async function loadAuditTrail() {
+            try {
+                const token = localStorage.getItem('access_token');
+                const container = document.getElementById('signals-container');
+                container.innerHTML = '<div class="loading-spinner">Loading signals...</div>';
+                
+                // Get filter values
+                const type = document.getElementById('filter-type').value;
+                const symbol = document.getElementById('filter-symbol').value;
+                const limit = document.getElementById('filter-limit').value;
+                
+                // Build query params
+                const params = new URLSearchParams();
+                if (type) params.append('signal_type', type);
+                if (symbol) params.append('symbol', symbol);
+                params.append('limit', limit);
+                
+                const response = await fetch(`${API_BASE}/v2/audit-trail?${params}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.status === 401) {
+                    window.location.href = '/auth.html';
+                    return;
+                }
+                
+                if (!response.ok) throw new Error('Failed to load audit trail');
+                
+                const data = await response.json();
+                currentSignals = data.signals || [];
+                
+                renderSignals(currentSignals);
+                
+            } catch (error) {
+                console.error('Error loading audit trail:', error);
+                document.getElementById('signals-container').innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">⚠️</div>
+                        <p>Failed to load audit trail</p>
+                        <p style="font-size: 0.85rem; margin-top: 8px;">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function renderSignals(signals) {
+            const container = document.getElementById('signals-container');
+            
+            if (signals.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📋</div>
+                        <p>No signals found in audit trail</p>
+                        <p style="font-size: 0.85rem; margin-top: 8px;">
+                            Signals will appear here when the AI generates recommendations
+                        </p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = signals.map(signal => {
+                const type = signal.signal_type || 'hold';
+                const confidence = (signal.confidence || 0) * 100;
+                const evidence = signal.evidence || {};
+                const techCount = evidence.technical_indicators?.length || 0;
+                const newsCount = evidence.news_headlines?.length || 0;
+                const patternCount = evidence.historical_patterns?.length || 0;
+                const hasEvidence = techCount + newsCount + patternCount > 0;
+                
+                return `
+                    <div class="signal-card ${hasEvidence ? 'verified' : 'not-verified'}" 
+                         onclick="showSignalDetail('${signal.signal_id}')">
+                        <div class="signal-header">
+                            <div>
+                                <div class="signal-symbol">${signal.symbol || 'Unknown'}</div>
+                                <div class="signal-meta">
+                                    <span>📅 ${new Date(signal.timestamp).toLocaleString()}</span>
+                                    <span>🔧 ${signal.signal_source || 'Unknown'}</span>
+                                </div>
+                            </div>
+                            <span class="signal-type ${type}">${type}</span>
+                        </div>
+                        
+                        <div class="confidence-bar">
+                            <div class="confidence-fill" style="width: ${confidence}%; 
+                                 background: ${confidence > 70 ? '#00ff9d' : confidence > 40 ? '#ffb84d' : '#ff6b6b'}"></div>
+                        </div>
+                        
+                        <div class="signal-evidence-preview">
+                            ${techCount > 0 ? `<span class="evidence-tag">📊 ${techCount} Technical</span>` : ''}
+                            ${newsCount > 0 ? `<span class="evidence-tag">📰 ${newsCount} News</span>` : ''}
+                            ${patternCount > 0 ? `<span class="evidence-tag">🔮 ${patternCount} Patterns</span>` : ''}
+                            <span class="evidence-tag" style="margin-left: auto;">
+                                ${hasEvidence ? '✅ Verified' : '⚠️ No Evidence'}
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function showSignalDetail(signalId) {
+            try {
+                const token = localStorage.getItem('access_token');
+                const modal = document.getElementById('signal-modal');
+                const body = document.getElementById('modal-body');
+                
+                body.innerHTML = '<div class="loading-spinner">Loading signal details...</div>';
+                modal.classList.add('active');
+                
+                const response = await fetch(`${API_BASE}/v2/audit-trail/${signalId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load signal details');
+                
+                const data = await response.json();
+                const signal = data.signal;
+                const evidence = signal.evidence || {};
+                
+                document.getElementById('modal-title').innerHTML = `
+                    ${signal.symbol} <span class="signal-type ${signal.signal_type}">${signal.signal_type}</span>
+                `;
+                
+                body.innerHTML = `
+                    <div style="margin-bottom: 20px;">
+                        <span class="integrity-status ${data.integrity_verified ? 'verified' : 'not-verified'}">
+                            ${data.integrity_verified ? '✅' : '⚠️'} 
+                            ${data.integrity_verified ? 'Integrity Verified' : 'Integrity Check Failed'}
+                        </span>
+                    </div>
+                    
+                    <div class="evidence-section">
+                        <h4>Signal Information</h4>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                            <div class="tech-item">
+                                <div class="indicator-name">Confidence Score</div>
+                                <div class="indicator-value">${(signal.confidence * 100).toFixed(1)}%</div>
+                            </div>
+                            <div class="tech-item">
+                                <div class="indicator-name">Timestamp</div>
+                                <div class="indicator-value" style="font-size: 0.9rem;">${new Date(signal.timestamp).toLocaleString()}</div>
+                            </div>
+                            <div class="tech-item">
+                                <div class="indicator-name">Source</div>
+                                <div class="indicator-value" style="font-size: 0.9rem;">${signal.signal_source}</div>
+                            </div>
+                            <div class="tech-item">
+                                <div class="indicator-name">Signal ID</div>
+                                <div class="indicator-value" style="font-size: 0.75rem;">${signal.signal_id}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    ${evidence.technical_indicators?.length > 0 ? `
+                        <div class="evidence-section">
+                            <h4>Technical Evidence (${evidence.technical_indicators.length})</h4>
+                            <div class="technical-evidence">
+                                ${evidence.technical_indicators.map(ti => `
+                                    <div class="tech-item">
+                                        <div class="indicator-name">${ti.indicator_name}</div>
+                                        <div class="indicator-value">${ti.value.toFixed(2)}</div>
+                                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
+                                            ${ti.condition} ${ti.threshold.toFixed(2)} • ${ti.interpretation}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    ${evidence.news_headlines?.length > 0 ? `
+                        <div class="evidence-section">
+                            <h4>News Evidence (${evidence.news_headlines.length})</h4>
+                            <div class="news-evidence">
+                                ${evidence.news_headlines.map(nh => `
+                                    <div class="news-item">
+                                        <div class="headline">${nh.headline}</div>
+                                        <div class="meta">
+                                            <span>📰 ${nh.source}</span>
+                                            <span>💭 Sentiment: ${(nh.sentiment_score * 100).toFixed(0)}%</span>
+                                            <span>📊 Impact: ${(nh.impact_score * 100).toFixed(0)}%</span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    ${evidence.historical_patterns?.length > 0 ? `
+                        <div class="evidence-section">
+                            <h4>Historical Patterns (${evidence.historical_patterns.length})</h4>
+                            <div class="news-evidence">
+                                ${evidence.historical_patterns.map(hp => `
+                                    <div class="news-item">
+                                        <div class="headline">${hp.pattern_name} (Confidence: ${hp.match_confidence.toFixed(0)}%)</div>
+                                        <div style="margin-top: 8px; font-size: 0.85rem;">
+                                            <div>Typical Outcome: ${hp.typical_outcome}</div>
+                                            <div>Success Rate: ${(hp.success_rate * 100).toFixed(0)}% • Avg Return: ${hp.avg_return_pct.toFixed(1)}%</div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    ${signal.agent_brain_state ? `
+                        <div class="evidence-section">
+                            <h4>Agent Brain Context</h4>
+                            <div style="background: var(--bg-secondary); padding: 16px; border-radius: 8px; font-size: 0.85rem;">
+                                <div>Market Regime: <strong>${signal.agent_brain_state.market_regime || 'Unknown'}</strong></div>
+                                <div>UI Theme: ${signal.agent_brain_state.ui_theme || 'Unknown'}</div>
+                                <div>Active Alerts: ${signal.agent_brain_state.active_alerts_count || 0}</div>
+                            </div>
+                        </div>
+                    ` : ''}
+                `;
+                
+            } catch (error) {
+                console.error('Error loading signal detail:', error);
+                document.getElementById('modal-body').innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">⚠️</div>
+                        <p>Failed to load signal details</p>
+                        <p style="font-size: 0.85rem; margin-top: 8px;">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('signal-modal').classList.remove('active');
+        }
+
+        function refreshData() {
+            loadAuditStats();
+            loadAuditTrail();
+        }
+
+        function logout() {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            sessionStorage.removeItem('quant_terminal_user');
+            localStorage.removeItem('quant_terminal_user');
+            window.location.href = '/auth.html';
+        }
+
+        // Close modal on escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        // Close modal on background click
+        document.getElementById('signal-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'signal-modal') closeModal();
+        });
+    </script>
+</body>
+</html>

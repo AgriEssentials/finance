@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quant Terminal | Portfolio Setup</title>
+    <!-- CRITICAL: Prevent cache -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <!-- NUCLEAR OPTION: Clear all storage if redirect loop detected -->
+    <script>
+        (function() {
+            const history = JSON.parse(localStorage.getItem('redirect_history') || '[]');
+            const recent = history.filter(r => Date.now() - r.time < 60000);
+            const setupDash = recent.filter(r => r.from === 'setup' && r.to === 'dashboard').length;
+            const dashSetup = recent.filter(r => r.from === 'dashboard' && r.to === 'setup').length;
+            
+            if (setupDash >= 3 || dashSetup >= 3) {
+                console.error('[NUCLEAR] Redirect loop detected - CLEARING ALL STORAGE');
+                localStorage.clear();
+                sessionStorage.clear();
+                // Force redirect to auth
+                window.location.replace('/auth.html');
+            }
+        })();
+    </script>
+    <link rel="stylesheet" href="/static/css/style.css?v=2">
+    <link rel="stylesheet" href="/static/css/pro-theme.css?v=2">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        .setup-container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 30px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+        }
+        .setup-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .setup-header h2 {
+            font-size: 1.8rem;
+            color: var(--text-inverse);
+            margin-bottom: 10px;
+        }
+        .setup-header p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+        .holding-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr auto;
+            gap: 12px;
+            margin-bottom: 12px;
+            align-items: center;
+        }
+        .holding-row input {
+            padding: 10px 14px !important;
+        }
+        .remove-btn {
+            background: rgba(242, 54, 69, 0.1);
+            color: var(--danger);
+            border: 1px solid rgba(242, 54, 69, 0.4);
+            border-radius: var(--radius-sm);
+            width: 38px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .remove-btn:hover {
+            background: rgba(242, 54, 69, 0.2);
+            color: #fff;
+        }
+        .add-btn {
+            background: rgba(34, 197, 94, 0.1) !important;
+            color: var(--success) !important;
+            border: 1px dashed var(--success) !important;
+            margin-top: 10px;
+        }
+        .add-btn:hover {
+            background: rgba(34, 197, 94, 0.2) !important;
+        }
+        .setup-footer {
+            margin-top: 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid var(--border-color);
+            padding-top: 20px;
+        }
+        .skip-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+        }
+        .skip-link:hover {
+            color: var(--text-primary);
+        }
+        .total-summary {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            padding: 16px;
+            border-radius: var(--radius-sm);
+            margin-top: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .total-summary span {
+            color: var(--text-secondary);
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+        }
+        .total-summary strong {
+            color: var(--text-inverse);
+            font-family: var(--font-mono);
+            font-size: 1.2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+    <!-- Immediate redirect check - runs before page renders -->
+    <script>
+        // ANTI-LOOP: Track redirect history
+        (function() {
+            const now = Date.now();
+            const redirectHistory = JSON.parse(localStorage.getItem('redirect_history') || '[]');
+            
+            // Clean old entries (>30 seconds)
+            const recentRedirects = redirectHistory.filter(r => now - r.time < 30000);
+            
+            // Count recent redirects between setup and dashboard
+            const setupToDashboard = recentRedirects.filter(r => 
+                r.from === 'setup' && r.to === 'dashboard'
+            ).length;
+            const dashboardToSetup = recentRedirects.filter(r => 
+                r.from === 'dashboard' && r.to === 'setup'
+            ).length;
+            
+            // BREAK LOOP: If we've been redirecting back and forth, stay here
+            if (setupToDashboard >= 2 && dashboardToSetup >= 2) {
+                console.error('[SETUP] DETECTED REDIRECT LOOP - Breaking by staying on setup page');
+                localStorage.removeItem('portfolio_setup_completed'); // Clear conflicting state
+                localStorage.removeItem('user_portfolio_setup');
+                // Clear history
+                localStorage.setItem('redirect_history', JSON.stringify([]));
+                return; // DON'T redirect - let user complete setup
+            }
+            
+            // FIX: Check if token exists before redirecting (prevent loop when token expired)
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                console.log('[SETUP] No token, staying on setup page');
+                // Clear any stale setup state
+                localStorage.removeItem('portfolio_setup_completed');
+                return; // Stay on setup page (will be redirected to auth by main script)
+            }
+            
+            // IMMEDIATE CHECK: If user has already completed setup, redirect instantly
+            const setupCompleted = localStorage.getItem('portfolio_setup_completed');
+            if (setupCompleted === 'true') {
+                console.log('[SETUP] Setup already marked complete, redirecting...');
+                // Track this redirect
+                recentRedirects.push({ from: 'setup', to: 'dashboard', time: now });
+                localStorage.setItem('redirect_history', JSON.stringify(recentRedirects));
+                window.location.replace('/dashboard.html');
+                return;
+            }
+            
+            // Also check if user has portfolio data in localStorage
+            const portfolioSetup = localStorage.getItem('user_portfolio_setup');
+            if (portfolioSetup) {
+                try {
+                    const setup = JSON.parse(portfolioSetup);
+                    if (setup.setup_complete) {
+                        console.log('[SETUP] Portfolio setup found in localStorage, redirecting...');
+                        // Track this redirect
+                        recentRedirects.push({ from: 'setup', to: 'dashboard', time: now });
+                        localStorage.setItem('redirect_history', JSON.stringify(recentRedirects));
+                        window.location.replace('/dashboard.html');
+                        return;
+                    }
+                } catch (e) {}
+            }
+        })();
+    </script>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">
+            <div class="logo-icon">AI</div>
+            <div class="logo-text">
+                <h1>AI Quant Terminal</h1>
+                <p>Professional Market Intelligence</p>
+            </div>
+        </div>
+        <nav class="main-nav">
+            <span style="color: var(--text-secondary); font-size: 0.85rem;">Portfolio Setup</span>
+        </nav>
+        <div class="header-actions">
+            <div class="user-info" id="user-info">
+                <span class="user-name" id="user-name">Trader</span>
+                <button class="logout-btn" id="logout-btn" title="Logout" onclick="logout()">🚪</button>
+            </div>
+        </div>
+    </header>
+
+        <div class="setup-container">
+            <div class="setup-header">
+                <h2>Initialize AI Portfolio Tracking</h2>
+                <p>Input your current holdings and preferences to allow the AI to personalize risk alerts and recommendations.</p>
+            </div>
+
+            <!-- Step 1: User Preferences -->
+            <div class="setup-section" style="margin-bottom: 30px; padding-bottom: 24px; border-bottom: 1px solid var(--border-color);">
+                <label style="display:block; margin-bottom: 16px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">
+                    1. Your Trading Preferences
+                </label>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                    <div class="form-group" style="margin: 0;">
+                        <label>Risk Tolerance</label>
+                        <select id="risk-tolerance" style="width: 100%; padding: 12px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary);">
+                            <option value="low">Conservative (Low Risk)</option>
+                            <option value="medium" selected>Balanced (Medium Risk)</option>
+                            <option value="high">Aggressive (High Risk)</option>
+                        </select>
+                        <small style="color: var(--text-muted); font-size: 0.8rem;">Determines position sizing and stop-loss levels</small>
+                    </div>
+                    
+                    <div class="form-group" style="margin: 0;">
+                        <label>Preferred Strategy</label>
+                        <select id="preferred-strategy" style="width: 100%; padding: 12px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary);">
+                            <option value="intraday">Intraday (Same Day)</option>
+                            <option value="swing" selected>Swing (2-4 Weeks)</option>
+                            <option value="long_term">Long Term (6+ Months)</option>
+                        </select>
+                        <small style="color: var(--text-muted); font-size: 0.8rem;">AI will prioritize this timeframe in recommendations</small>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Total Available Capital (Cash) INR</label>
+                    <input type="number" id="cash-balance" placeholder="e.g. 500000" value="0" style="font-size: 1.2rem;">
+                    <small style="color: var(--text-muted); font-size: 0.8rem;">Used for position sizing calculations</small>
+                </div>
+            </div>
+
+            <!-- Step 2: Portfolio Holdings -->
+            <div class="setup-section">
+                <label style="display:block; margin-bottom: 16px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">
+                    2. Current Holdings (Optional)
+                </label>
+                
+                <div class="holding-row" style="margin-bottom: 8px;">
+                    <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono)">SYMBOL (e.g. RELIANCE.NS)</div>
+                    <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono)">QUANTITY</div>
+                    <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono)">AVG PRICE</div>
+                    <div></div>
+                </div>
+
+                <div id="holdings-list">
+                    <!-- Default initial row -->
+                    <div class="holding-row">
+                        <input type="text" class="h-symbol" placeholder="HDFCBANK.NS">
+                        <input type="number" class="h-qty" placeholder="100">
+                        <input type="number" class="h-price" placeholder="1650.00">
+                        <button class="remove-btn" onclick="this.parentElement.remove(); updateTotals()">✕</button>
+                    </div>
+                </div>
+
+                <button class="btn-secondary add-btn" id="add-holding-btn" style="width: 100%;">
+                    + Add Another Stock
+                </button>
+            </div>
+
+            <div class="total-summary box-glow">
+                <span>Calculated Total Portfolio Value:</span>
+                <strong id="total-value">₹ 0.00</strong>
+            </div>
+
+            <div class="setup-footer">
+                <a href="/analysis.html" class="skip-link">Skip this step</a>
+                <button class="btn-primary" id="save-setup-btn" style="width: auto;">
+                    Deploy Personal AI Engine ➔
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const holdingsList = document.getElementById('holdings-list');
+        const addBtn = document.getElementById('add-holding-btn');
+        const cashInput = document.getElementById('cash-balance');
+        const totalValueEl = document.getElementById('total-value');
+        const saveBtn = document.getElementById('save-setup-btn');
+
+        function addRow() {
+            const row = document.createElement('div');
+            row.className = 'holding-row';
+            row.innerHTML = `
+                <input type="text" class="h-symbol" placeholder="SYMBOL.NS">
+                <input type="number" class="h-qty" placeholder="Qty">
+                <input type="number" class="h-price" placeholder="Avg Price">
+                <button class="remove-btn" onclick="this.parentElement.remove(); updateTotals()">✕</button>
+            `;
+            holdingsList.appendChild(row);
+            
+            // Add listeners to new inputs
+            row.querySelectorAll('input').forEach(i => i.addEventListener('input', updateTotals));
+        }
+
+        function updateTotals() {
+            let total = parseFloat(cashInput.value) || 0;
+            const rows = document.querySelectorAll('#holdings-list .holding-row');
+            
+            rows.forEach(row => {
+                const qtyNode = row.querySelector('.h-qty');
+                const priceNode = row.querySelector('.h-price');
+                const qty = qtyNode ? (parseFloat(qtyNode.value) || 0) : 0;
+                const price = priceNode ? (parseFloat(priceNode.value) || 0) : 0;
+                total += (qty * price);
+            });
+            
+            totalValueEl.textContent = '₹ ' + total.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+
+        addBtn.addEventListener('click', addRow);
+        cashInput.addEventListener('input', updateTotals);
+        
+        // Listeners for initial loaded row
+        document.querySelectorAll('.holding-row input').forEach(i => i.addEventListener('input', updateTotals));
+
+        saveBtn.addEventListener('click', async () => {
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+            
+            // Collect user preferences
+            const riskTolerance = document.getElementById('risk-tolerance').value;
+            const preferredStrategy = document.getElementById('preferred-strategy').value;
+            
+            // Collect portfolio data
+            const cash = parseFloat(cashInput.value) || 0;
+            const holdings = [];
+            const rows = document.querySelectorAll('#holdings-list .holding-row');
+            
+            rows.forEach(row => {
+                const symbolNode = row.querySelector('.h-symbol');
+                const qtyNode = row.querySelector('.h-qty');
+                const priceNode = row.querySelector('.h-price');
+
+                if (symbolNode && qtyNode && priceNode) {
+                    const symbol = symbolNode.value.trim();
+                    const qty = parseFloat(qtyNode.value) || 0;
+                    const price = parseFloat(priceNode.value) || 0;
+                    
+                    if (symbol && qty > 0) {
+                        holdings.push({ symbol, qty, price });
+                    }
+                }
+            });
+
+            const setupData = {
+                cash_balance: cash,
+                holdings: holdings,
+                risk_tolerance: riskTolerance,
+                preferred_strategy: preferredStrategy,
+                setup_complete: true
+            };
+
+            // Save to localStorage for backup and quick access
+            localStorage.setItem('user_portfolio_setup', JSON.stringify(setupData));
+            localStorage.setItem('user_risk_tolerance', riskTolerance);
+            localStorage.setItem('user_preferred_strategy', preferredStrategy);
+            
+            // Send to backend API
+            try {
+                const token = localStorage.getItem('access_token');
+                if (!token) {
+                    throw new Error('Not authenticated');
+                }
+                
+                // Save portfolio setup (includes preferences)
+                const response = await fetch('/api/portfolio/setup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(setupData)
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to save setup');
+                }
+                
+                const result = await response.json();
+                console.log('Setup saved:', result);
+                
+                // Mark setup as completed in localStorage to prevent showing again
+                localStorage.setItem('portfolio_setup_completed', 'true');
+                
+                // Redirect to dashboard
+                window.location.href = '/dashboard.html';
+            } catch (error) {
+                console.error('Error saving setup:', error);
+                alert('Error saving setup: ' + error.message);
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Deploy Personal AI Engine ➔';
+            }
+        });
+
+        // ANTI-LOOP: Check redirect history
+        function checkLoopAndTrack(from, to) {
+            const now = Date.now();
+            const redirectHistory = JSON.parse(localStorage.getItem('redirect_history') || '[]');
+            const recentRedirects = redirectHistory.filter(r => now - r.time < 30000);
+            
+            const setupToDashboard = recentRedirects.filter(r => 
+                r.from === 'setup' && r.to === 'dashboard'
+            ).length;
+            const dashboardToSetup = recentRedirects.filter(r => 
+                r.from === 'dashboard' && r.to === 'setup'
+            ).length;
+            
+            if (setupToDashboard >= 2 && dashboardToSetup >= 2) {
+                console.error(`[SETUP] LOOP DETECTED - Blocking redirect from ${from} to ${to}`);
+                return true; // Loop detected
+            }
+            
+            // Track this redirect
+            recentRedirects.push({ from, to, time: now });
+            localStorage.setItem('redirect_history', JSON.stringify(recentRedirects));
+            return false; // No loop
+        }
+
+        // Initialize user info from Auth if available
+        // Check if user already has portfolio setup - if yes, redirect to analysis
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                let session = sessionStorage.getItem('quant_terminal_user') || localStorage.getItem('quant_terminal_user');
+                if (session) {
+                    const parsed = JSON.parse(session);
+                    if (parsed && parsed.user && parsed.user.name) {
+                        document.getElementById('user-name').textContent = parsed.user.name;
+                    }
+                }
+                
+                // Check if setup is already complete - if yes, redirect away (never show setup again)
+                // First check localStorage for immediate redirect without API call
+                const setupCompleted = localStorage.getItem('portfolio_setup_completed');
+                if (setupCompleted === 'true') {
+                    // ANTI-LOOP: Check before redirecting
+                    if (checkLoopAndTrack('setup', 'dashboard')) {
+                        console.log('[SETUP] Loop detected, clearing conflicting state and staying on setup');
+                        localStorage.removeItem('portfolio_setup_completed');
+                        localStorage.removeItem('user_portfolio_setup');
+                        // Don't redirect - let user complete setup
+                    } else {
+                        console.log('[SETUP] Setup already completed (localStorage), redirecting to dashboard');
+                        window.location.href = '/dashboard.html';
+                        return;
+                    }
+                }
+                
+                // Then verify with API
+                const token = localStorage.getItem('access_token');
+                if (token) {
+                    try {
+                        const response = await fetch('/api/portfolio/setup', {
+                            headers: {'Authorization': `Bearer ${token}`}
+                        });
+                        
+                        // FIX: Handle 401 Unauthorized - token expired
+                        if (response.status === 401) {
+                            console.error('[SETUP] Token expired (401), clearing and redirecting to login');
+                            localStorage.removeItem('access_token');
+                            localStorage.removeItem('refresh_token');
+                            localStorage.removeItem('portfolio_setup_completed');
+                            window.location.href = '/auth.html';
+                            return;
+                        }
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            // Only check setup_complete flag - new users get default cash but setup_complete is false
+                            if (data.setup_complete === true) {
+                                // ANTI-LOOP: Check before redirecting
+                                if (checkLoopAndTrack('setup', 'dashboard')) {
+                                    console.log('[SETUP] Loop detected from API check - clearing state and staying');
+                                    localStorage.removeItem('portfolio_setup_completed');
+                                    // Don't redirect - break the loop
+                                } else {
+                                    console.log('[SETUP] User already has portfolio setup, redirecting to dashboard');
+                                    // Store in localStorage to prevent future checks
+                                    localStorage.setItem('portfolio_setup_completed', 'true');
+                                    window.location.href = '/dashboard.html';
+                                }
+                            }
+                        } else {
+                            // API error (not 401) - clear conflicting state
+                            console.log('[SETUP] API error, clearing setup_completed flag');
+                            localStorage.removeItem('portfolio_setup_completed');
+                        }
+                    } catch(e) {
+                        console.log('[SETUP] Could not check setup status:', e);
+                        localStorage.removeItem('portfolio_setup_completed');
+                    }
+                } else {
+                    // No token - redirect to auth
+                    console.log('[SETUP] No token found, redirecting to auth');
+                    window.location.href = '/auth.html';
+                }
+            } catch(e) {}
+            
+            // Clear redirect history after successful load (prevents stale loops)
+            setTimeout(() => {
+                localStorage.removeItem('redirect_history');
+                console.log('[SETUP] Cleared redirect history on successful load');
+            }, 10000);
+        });
+
+        // Logout function - uses AuthSystem if available
+        function logout() {
+            if (typeof AuthSystem !== 'undefined' && AuthSystem.logout) {
+                AuthSystem.logout();
+            } else {
+                // Fallback if AuthSystem not loaded
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refresh_token');
+                sessionStorage.removeItem('quant_terminal_user');
+                localStorage.removeItem('quant_terminal_user');
+                localStorage.removeItem('portfolio_setup_completed');
+                window.location.href = '/auth.html';
+            }
+        }
+    </script>
+</body>
+</html>
