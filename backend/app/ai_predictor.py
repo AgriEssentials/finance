@@ -1,6 +1,6 @@
 """
 AI Prediction Module
-Handles AI-powered stock prediction using Gemini API
+Handles AI-powered stock prediction using Groq API
 Integrates all analysis data to provide professional trading recommendations
 Includes price prediction chart data
 """
@@ -8,6 +8,7 @@ Includes price prediction chart data
 import os
 import requests
 import json
+import time
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime, timedelta
 import math
@@ -19,19 +20,19 @@ load_dotenv()
 
 
 class AIStockPredictor:
-    """Class to get AI-powered predictions from Gemini API."""
+    """Class to get AI-powered predictions from Groq API."""
     
     def __init__(self, api_key: Optional[str] = None):
         """
         Initialize AI predictor
         
         Args:
-            api_key: Gemini API key (optional, can be set via environment variable)
+            api_key: Groq API key (optional, can be set via environment variable)
         """
-        self.gemini_api_key = api_key or os.getenv('GEMINI_API_KEY')
-        self.model = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash')
-        configured_candidates = os.getenv('GEMINI_MODEL_CANDIDATES', '').strip()
-        default_candidates = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash']
+        self.groq_api_key = api_key or os.getenv('GROQ_API_KEY')
+        self.model = os.getenv('GROQ_MODEL', 'openai/gpt-oss-120b')
+        configured_candidates = os.getenv('GROQ_MODEL_CANDIDATES', '').strip()
+        default_candidates = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b', 'groq/compound-mini']
         if configured_candidates:
             parsed = [m.strip() for m in configured_candidates.split(',') if m.strip()]
             self.model_candidates = parsed if parsed else default_candidates
@@ -39,7 +40,7 @@ class AIStockPredictor:
             self.model_candidates = default_candidates
         print(
             "DEBUG: AI Predictor initialized. "
-            f"Gemini key present: {bool(self.gemini_api_key)}"
+            f"Groq key present: {bool(self.groq_api_key)}"
         )
     
     def get_ai_prediction(
@@ -54,7 +55,7 @@ class AIStockPredictor:
         price_history: Optional[pd.DataFrame] = None
     ) -> Dict[str, Any]:
         """
-        Get AI prediction from Gemini API
+        Get AI prediction from Groq API
         
         Args:
             symbol: Stock symbol
@@ -88,11 +89,11 @@ class AIStockPredictor:
             ai_model = "Fallback Algorithm"
             source = "fallback"
 
-            # Primary: Gemini for richer explanatory output.
-            ai_response, used_gemini_model = self._call_gemini(prompt + price_prompt)
+            # Primary: Groq for richer explanatory output.
+            ai_response, used_groq_model = self._call_groq(prompt + price_prompt)
             if ai_response:
                 prediction_data = self._extract_json(ai_response)
-                ai_model = f"Gemini ({used_gemini_model})"
+                ai_model = f"Groq ({used_groq_model})"
                 source = "api"
 
             if not prediction_data:
@@ -138,9 +139,9 @@ class AIStockPredictor:
                 technical_indicators, sentiment_data, ml_prediction, price_history, mode
             )
 
-    def _call_gemini(self, prompt: str) -> Tuple[Optional[str], Optional[str]]:
-        """Call Gemini with model fallback and return (output, model_used)."""
-        if not self.gemini_api_key:
+    def _call_groq(self, prompt: str) -> Tuple[Optional[str], Optional[str]]:
+        """Call Groq with model fallback and return (output, model_used)."""
+        if not self.groq_api_key:
             return None, None
 
         # Try user-selected model first, then latest known safe fallbacks.
@@ -151,63 +152,60 @@ class AIStockPredictor:
         if self.model and self.model not in models_to_try:
             models_to_try.append(self.model)
 
-        payload = {
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": [
-                        {
-                            "text": (
-                                "You are a professional stock market analyst. "
-                                "Return ONLY valid JSON with keys: prediction, confidence, reasoning, key_factors, "
-                                "risk_level, recommendation, price_target, stop_loss, predicted_prices, geopolitical_scenarios, disclaimer.\n\n"
-                                + prompt
-                            )
-                        }
-                    ]
-                }
-            ],
-            "generationConfig": {
-                "temperature": 0.2,
-                "maxOutputTokens": 1200,
-                "responseMimeType": "application/json"
-            }
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.groq_api_key}",
+            "Content-Type": "application/json"
         }
 
         for model_name in models_to_try:
             try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={self.gemini_api_key}"
+                payload = {
+                    "model": model_name,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": (
+                                "You are a professional stock market analyst. "
+                                "Return ONLY valid JSON with keys: prediction, confidence, reasoning, key_factors, "
+                                "risk_level, recommendation, price_target, stop_loss, predicted_prices, "
+                                "geopolitical_scenarios, disclaimer."
+                            )
+                        },
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.2,
+                    "max_tokens": 1200
+                }
+
                 # Strict timeout: 8s for first model, 5s for fallbacks
                 timeout = 8 if model_name == models_to_try[0] else 5
-                response = requests.post(url, json=payload, timeout=timeout)
-                
-                if response.status_code == 400:
-                    payload_no_json = dict(payload)
-                    payload_no_json["generationConfig"] = {"temperature": 0.2, "maxOutputTokens": 1200}
-                    response = requests.post(url, json=payload_no_json, timeout=timeout)
+                response = None
+                for attempt in range(3):
+                    response = requests.post(url, json=payload, headers=headers, timeout=timeout)
+                    if response.status_code != 429:
+                        break
+                    print(f"Groq ({model_name}): Rate limited (429), retrying in 2s ({attempt + 1}/3)...")
+                    time.sleep(2)
 
-                if response.status_code != 200:
-                    print(f"Gemini API error ({model_name}): {response.status_code} - {response.text[:200]}")
+                if response is None or response.status_code != 200:
+                    print(f"Groq API error ({model_name}): {response.status_code if response else 'no response'} - {(response.text[:200] if response is not None else '')}")
                     continue
 
                 result = response.json()
-                candidates = result.get("candidates", [])
-                if not candidates:
+                choices = result.get("choices", [])
+                if not choices:
                     continue
 
-                parts = candidates[0].get("content", {}).get("parts", [])
-                if not parts:
-                    continue
-
-                text = parts[0].get("text")
+                text = choices[0].get("message", {}).get("content")
                 if text:
-                    print(f"Gemini ({model_name}): Success")
+                    print(f"Groq ({model_name}): Success")
                     return text, model_name
             except requests.Timeout:
-                print(f"Gemini ({model_name}): Timeout")
+                print(f"Groq ({model_name}): Timeout")
                 continue
             except Exception as e:
-                print(f"Gemini ({model_name}): Error - {str(e)[:50]}")
+                print(f"Groq ({model_name}): Error - {str(e)[:50]}")
                 continue
 
         return None, None

@@ -126,6 +126,8 @@ Quant Terminal is a comprehensive web-based stock analysis platform designed for
 | GNews API | News headlines and articles | 100 requests/day (free) |
 | Finnhub API | Company news and fundamentals | 60 requests/minute |
 | NewsData.io | Alternative news source | 200 requests/day (free) |
+| Groq | AI analysis & predictions (Llama models) | Depends on plan |
+| Firecrawl | Stock-specific news search & scraping | Depends on plan |
 
 ---
 
@@ -235,7 +237,8 @@ SUPABASE_SERVICE_KEY=your-service-role-key
 NEWSDATA_API_KEY=your-newsdata-key
 GNEWS_API_KEY=your-gnews-key
 FINNHUB_API_KEY=your-finnhub-key
-GEMINI_API_KEY=your-gemini-key
+GROQ_API_KEY=your-groq-key
+FIRECRAWL_API_KEY=your-firecrawl-key
 
 # Redis (optional)
 REDIS_URL=redis://localhost:6379/0
@@ -291,7 +294,8 @@ python -m http.server 8080
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis connection string |
 | `PORT` | `8001` | Server port |
 | `DEBUG` | `false` | Enable debug mode |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini AI model name |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | Groq AI model name |
+| `GROQ_SENTIMENT_MODEL` | `groq/compound-mini` | Lightweight Groq model for per-article sentiment (avoids rate limits) |
 | `CACHE_TTL` | `300` | Default cache TTL in seconds |
 
 ---

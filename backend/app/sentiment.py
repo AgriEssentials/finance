@@ -10,6 +10,7 @@ import aiohttp
 import requests
 from typing import List, Dict, Any, Optional
 import re
+import time
 from datetime import datetime, timedelta
 
 # Load environment variables from .env file at module import time
@@ -47,20 +48,22 @@ class SentimentAnalyzer:
         Args:
             api_key: Reserved for compatibility (unused)
         """
-        self.gemini_api_key = os.getenv('GEMINI_API_KEY')
+        self.groq_api_key = os.getenv('GROQ_API_KEY')
         # Support both env var names used across project setup.
         self.newsdata_api_key = os.getenv('NEWSDATA_API_KEY') or os.getenv('NEWS_API_KEY')
-        self.gemini_model = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash')
-        configured_candidates = os.getenv('GEMINI_MODEL_CANDIDATES', '').strip()
-        default_candidates = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash']
+        self.groq_model = os.getenv('GROQ_SENTIMENT_MODEL') or os.getenv('GROQ_MODEL', 'openai/gpt-oss-120b')
+        configured_candidates = os.getenv('GROQ_MODEL_CANDIDATES', '').strip()
+        default_candidates = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b', 'groq/compound-mini']
         if configured_candidates:
             parsed = [m.strip() for m in configured_candidates.split(',') if m.strip()]
-            self.gemini_model_candidates = parsed if parsed else default_candidates
+            self.groq_model_candidates = parsed if parsed else default_candidates
         else:
-            self.gemini_model_candidates = default_candidates
+            self.groq_model_candidates = default_candidates
         self.newsdata_url = "https://newsdata.io/api/1/news"
         self.gnews_api_key = os.getenv('GNEWS_API_KEY')
         self.gnews_url = "https://gnews.io/api/v4/search"
+        self.firecrawl_api_key = os.getenv('FIRECRAWL_API_KEY')
+        self.firecrawl_url = "https://api.firecrawl.dev/v2/search"
         self.finnhub_api_key = (
             os.getenv('FINNHUB_API_KEY')
             or os.getenv('FINHUB_API_KEY')
@@ -71,6 +74,7 @@ class SentimentAnalyzer:
         self.finnhub_url = "https://finnhub.io/api/v1/company-news"
         self.max_articles_to_analyze = 100  # Analyze at least 100 real articles
         self.min_articles_to_analyze = 50
+        self.max_groq_sentiment_articles = 15  # Cap LLM sentiment calls per stock (rate limits)
         self.top_impact_to_show = 15  # Show top 15 most impactful
         self.last_news_provider_stats: Dict[str, Any] = {}
         
@@ -85,33 +89,47 @@ class SentimentAnalyzer:
         print("[OK] Sentiment analyzer ready (model will load on first use)")
     
     def _ensure_transformer_loaded(self):
-        """Lazy load transformer model on first use"""
+        """Lazy load transformer model on first use (with timeout to avoid hangs)"""
         if self.use_transformer is not None:
             return  # Already tried to load
-        
-        try:
-            from transformers import pipeline
-            # Use DistilBERT for faster sentiment analysis
-            print("[LOADING] Loading DistilBERT model (first time only, ~3-5 seconds)...")
-            self.sentiment_pipeline = pipeline(
-                "sentiment-analysis",
-                model="distilbert-base-uncased-finetuned-sst-2-english",
-                truncation=True,
-                max_length=512
-            )
-            self.use_transformer = True
-            print("[OK] Transformer model loaded successfully")
-        except Exception as e:
-            print(f"[WARNING] Could not load transformer model: {e}. Falling back to keyword-based analysis.")
+
+        def _load():
+            try:
+                from transformers import pipeline
+                self.sentiment_pipeline = pipeline(
+                    "sentiment-analysis",
+                    model="distilbert-base-uncased-finetuned-sst-2-english",
+                    truncation=True,
+                    max_length=512
+                )
+                self.use_transformer = True
+                print("[OK] Transformer model loaded successfully")
+            except Exception as e:
+                print(f"[WARNING] Could not load transformer model: {e}. Falling back to keyword-based analysis.")
+                self.use_transformer = False
+
+        import threading
+        thread = threading.Thread(target=_load, daemon=True)
+        thread.start()
+        thread.join(timeout=60)
+        if thread.is_alive():
+            print("[WARNING] Transformer model load timed out (60s). Falling back to keyword-based analysis.")
             self.use_transformer = False
 
     def analyze_sentiment(self, text: str) -> Dict[str, Any]:
-        """Analyze sentiment with transformer primary, Gemini secondary, then keyword fallback."""
-        # Ensure transformer is loaded (lazy load on first use)
+        """Analyze sentiment with Groq primary, transformer secondary, then keyword fallback."""
+        # Try Groq first (fast inference, no heavy model download)
+        if self.groq_api_key:
+            try:
+                groq_result = self._analyze_sentiment_groq(text)
+                if groq_result:
+                    return groq_result
+            except Exception as e:
+                pass
+
+        # Try transformer (lazy load on first use)
         if self.use_transformer is None:
             self._ensure_transformer_loaded()
-        
-        # Try transformer first (most accurate)
         if self.use_transformer:  # Now it's either True or False, not None
             try:
                 transformer_result = self._analyze_sentiment_transformer(text)
@@ -119,14 +137,6 @@ class SentimentAnalyzer:
                     return transformer_result
             except Exception as e:
                 pass
-
-        # Try Gemini
-        try:
-            gemini_result = self._analyze_sentiment_gemini(text)
-            if gemini_result:
-                return gemini_result
-        except Exception as e:
-            pass
 
         # Fallback to keyword-based
         return self._fallback_sentiment(text)
@@ -169,16 +179,19 @@ class SentimentAnalyzer:
         except Exception as e:
             return None
 
-    def _analyze_sentiment_gemini(self, text: str) -> Optional[Dict[str, Any]]:
-        """Analyze sentiment using Google's Gemini API"""
+    def _analyze_sentiment_groq(self, text: str) -> Optional[Dict[str, Any]]:
+        """Analyze sentiment using Groq's LLM API"""
         try:
-            if not self.gemini_api_key:
+            if not self.groq_api_key:
                 return None
             
-            import google.generativeai as genai
-            
-            genai.configure(api_key=self.gemini_api_key)
-            model = genai.GenerativeModel(self.gemini_model)
+            import requests
+
+            url = "https://api.groq.com/openai/v1/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {self.groq_api_key}",
+                "Content-Type": "application/json"
+            }
             
             # Craft a detailed prompt for financial sentiment
             prompt = f"""Analyze the financial sentiment of this news headline/text.
@@ -199,21 +212,43 @@ Rules:
 - Neutral: factual reporting, no clear directional impact
 - Consider impact on stock price (positive news may be negative for competitors)"""
 
-            response = model.generate_content(prompt)
-            response_text = response.text
+            payload = {
+                "model": self.groq_model,
+                "messages": [
+                    {"role": "system", "content": "You are a financial sentiment analyst. Respond only with valid JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.2,
+                "max_tokens": 300
+            }
+
+            response = None
+            for attempt in range(3):
+                response = requests.post(url, json=payload, headers=headers, timeout=10)
+                if response.status_code != 429:
+                    break
+                print(f"[GROQ SENTIMENT] Rate limited (429), retrying in 2s ({attempt + 1}/3)...")
+                time.sleep(2)
+
+            if response is None or response.status_code != 200:
+                print(f"[GROQ SENTIMENT] API error: {response.status_code if response else 'no response'} - {(response.text[:200] if response is not None else '')}")
+                return None
+
+            result = response.json()
+            response_text = result.get("choices", [{}])[0].get("message", {}).get("content", "")
             
             # Extract JSON from response
             json_match = re.search(r'\{[^}]+\}', response_text, re.DOTALL)
             if json_match:
                 import json
-                result = json.loads(json_match.group())
+                parsed = json.loads(json_match.group())
                 
                 return {
-                    'score': result.get('score', 0),
-                    'label': result.get('sentiment', 'neutral'),
-                    'confidence': result.get('confidence', 0.5),
-                    'method': 'gemini',
-                    'reasoning': result.get('reasoning', '')
+                    'score': parsed.get('score', 0),
+                    'label': parsed.get('sentiment', 'neutral'),
+                    'confidence': parsed.get('confidence', 0.5),
+                    'method': 'groq',
+                    'reasoning': parsed.get('reasoning', '')
                 }
             return None
             
@@ -490,6 +525,35 @@ Rules:
             'company_name': company_name
         }
 
+    def _parse_relative_date(self, date_str: str) -> str:
+        """Convert Firecrawl relative dates like '12 hours ago' to ISO format."""
+        if not date_str:
+            return ""
+        text = date_str.strip().lower()
+        now = datetime.now()
+        match = re.match(r"^(\d+)\s+(minute|hour|day|week|month|year)s?\s+ago$", text)
+        if match:
+            amount = int(match.group(1))
+            unit = match.group(2)
+            if unit == "minute":
+                dt = now - timedelta(minutes=amount)
+            elif unit == "hour":
+                dt = now - timedelta(hours=amount)
+            elif unit == "day":
+                dt = now - timedelta(days=amount)
+            elif unit == "week":
+                dt = now - timedelta(weeks=amount)
+            elif unit == "month":
+                dt = now - timedelta(days=amount * 30)
+            else:  # year
+                dt = now - timedelta(days=amount * 365)
+            return dt.isoformat()
+        if text in ("just now", "now", "today"):
+            return now.isoformat()
+        if text == "yesterday":
+            return (now - timedelta(days=1)).isoformat()
+        return date_str
+
     def _normalize_url(self, url: str) -> str:
         """Normalize URL for deduplication"""
         if not url:
@@ -514,6 +578,7 @@ Rules:
         
         # Recency scoring
         published = article.get('published_at', '') or article.get('pubDate', '')
+        hours_ago = float('inf')
         if published:
             try:
                 # Parse date and calculate recency
@@ -661,6 +726,45 @@ Rules:
             print(f"[ASYNC NewsData] Error: {e}")
         return []
 
+    async def _fetch_news_headlines_firecrawl_async(self, session: aiohttp.ClientSession, company_name: str, clean_symbol: str) -> List[Dict[str, Any]]:
+        """Async fetch stock-specific news via Firecrawl search API"""
+        if not self.firecrawl_api_key:
+            return []
+            
+        headers = {
+            "Authorization": f"Bearer {self.firecrawl_api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "query": f"{company_name} OR {clean_symbol} stock news",
+            "limit": 10,
+            "sources": ["news"]
+        }
+        
+        try:
+            async with session.post(self.firecrawl_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=25)) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    articles = []
+                    for item in data.get("data", {}).get("news", []):
+                        title = item.get("title", "")
+                        if not title:
+                            continue
+                        snippet = item.get("snippet") or item.get("description") or item.get("markdown") or ""
+                        articles.append({
+                            "title": title,
+                            "source": "Firecrawl",
+                            "url": item.get("url", ""),
+                            "description": snippet[:2000],
+                            "content": snippet[:2000],
+                            "published_at": self._parse_relative_date(item.get("date", "")),
+                            "fetch_source": "firecrawl"
+                        })
+                    return articles
+        except Exception as e:
+            print(f"[ASYNC Firecrawl] Error: {e}")
+        return []
+
     async def fetch_news_headlines_async(self, symbol: str) -> List[Dict[str, Any]]:
         """
         Async version: Fetch latest news headlines for a stock symbol.
@@ -670,8 +774,8 @@ Rules:
         clean_symbol = context["clean_symbol"]
         company_name = context["company_name"]
 
-        if not self.gnews_api_key and not self.finnhub_api_key and not self.newsdata_api_key:
-            print("[WARNING] No GNews/Finnhub/NewsData key found in environment")
+        if not self.gnews_api_key and not self.finnhub_api_key and not self.newsdata_api_key and not self.firecrawl_api_key:
+            print("[WARNING] No GNews/Finnhub/NewsData/Firecrawl key found in environment")
             return []
 
         async with aiohttp.ClientSession() as session:
@@ -679,7 +783,8 @@ Rules:
             tasks = [
                 self._fetch_news_headlines_gnews_async(session, company_name, clean_symbol),
                 self._fetch_news_headlines_finnhub_async(session, symbol, company_name, clean_symbol),
-                self._fetch_news_headlines_newsdata_async(session, company_name, clean_symbol)
+                self._fetch_news_headlines_newsdata_async(session, company_name, clean_symbol),
+                self._fetch_news_headlines_firecrawl_async(session, company_name, clean_symbol)
             ]
             
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -687,10 +792,11 @@ Rules:
             gnews_articles = results[0] if not isinstance(results[0], Exception) else []
             finnhub_articles = results[1] if not isinstance(results[1], Exception) else []
             newsdata_articles = results[2] if not isinstance(results[2], Exception) else []
+            firecrawl_articles = results[3] if not isinstance(results[3], Exception) else []
 
         merged: List[Dict[str, Any]] = []
         seen_urls = set()
-        for article in gnews_articles + finnhub_articles + newsdata_articles:
+        for article in gnews_articles + finnhub_articles + newsdata_articles + firecrawl_articles:
             if not isinstance(article, dict):
                 continue
             url = self._normalize_url(article.get("url", ""))
@@ -703,18 +809,21 @@ Rules:
 
         print(
             f"[MERGED ASYNC] Combined articles => GNews: {len(gnews_articles)}, "
-            f"Finnhub: {len(finnhub_articles)}, NewsData: {len(newsdata_articles)}, Final: {len(merged)}"
+            f"Finnhub: {len(finnhub_articles)}, NewsData: {len(newsdata_articles)}, "
+            f"Firecrawl: {len(firecrawl_articles)}, Final: {len(merged)}"
         )
         self.last_news_provider_stats = {
             "configured_keys": {
                 "gnews": bool(self.gnews_api_key),
                 "finnhub": bool(self.finnhub_api_key),
-                "newsdata": bool(self.newsdata_api_key)
+                "newsdata": bool(self.newsdata_api_key),
+                "firecrawl": bool(self.firecrawl_api_key)
             },
             "provider_article_counts": {
                 "gnews": len(gnews_articles),
                 "finnhub": len(finnhub_articles),
-                "newsdata": len(newsdata_articles)
+                "newsdata": len(newsdata_articles),
+                "firecrawl": len(firecrawl_articles)
             },
             "merged_unique_articles": len(merged)
         }
@@ -815,6 +924,44 @@ Rules:
             print(f"[NewsData Sync] Error: {e}")
         return []
 
+    def _fetch_news_headlines_firecrawl(self, company_name: str, clean_symbol: str) -> List[Dict[str, Any]]:
+        """Sync fetch from Firecrawl search API (fallback)"""
+        if not self.firecrawl_api_key:
+            return []
+            
+        headers = {
+            "Authorization": f"Bearer {self.firecrawl_api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "query": f"{company_name} OR {clean_symbol} stock news",
+            "limit": 10,
+            "sources": ["news"]
+        }
+        
+        try:
+            response = requests.post(self.firecrawl_url, headers=headers, json=payload, timeout=25)
+            if response.status_code == 200:
+                articles = []
+                for item in response.json().get("data", {}).get("news", []):
+                    title = item.get("title", "")
+                    if not title:
+                        continue
+                    snippet = item.get("snippet") or item.get("description") or item.get("markdown") or ""
+                    articles.append({
+                        "title": title,
+                        "source": "Firecrawl",
+                        "url": item.get("url", ""),
+                        "description": snippet[:2000],
+                        "content": snippet[:2000],
+                        "published_at": self._parse_relative_date(item.get("date", "")),
+                        "fetch_source": "firecrawl"
+                    })
+                return articles
+        except Exception as e:
+            print(f"[Firecrawl Sync] Error: {e}")
+        return []
+
     def fetch_news_headlines(self, symbol: str) -> List[Dict[str, Any]]:
         """
         Sync version: Fetch latest news headlines for a stock symbol.
@@ -841,10 +988,11 @@ Rules:
             gnews_articles = self._fetch_news_headlines_gnews(company_name, clean_symbol)
             finnhub_articles = self._fetch_news_headlines_finnhub(symbol, company_name, clean_symbol)
             newsdata_articles = self._fetch_news_headlines_newsdata(company_name, clean_symbol)
+            firecrawl_articles = self._fetch_news_headlines_firecrawl(company_name, clean_symbol)
             
             merged = []
             seen_urls = set()
-            for article in gnews_articles + finnhub_articles + newsdata_articles:
+            for article in gnews_articles + finnhub_articles + newsdata_articles + firecrawl_articles:
                 if not isinstance(article, dict):
                     continue
                 url = self._normalize_url(article.get("url", ""))
@@ -1135,6 +1283,8 @@ Rules:
         analyze_count = min(total_fetched, self.max_articles_to_analyze)
         if analyze_count < self.min_articles_to_analyze:
             analyze_count = total_fetched
+        # Cap LLM sentiment calls to stay within API rate limits
+        analyze_count = min(analyze_count, self.max_groq_sentiment_articles)
         analysis_pool = enriched_articles[:analyze_count]
         top_impact_articles = analysis_pool[:self.top_impact_to_show]
 
@@ -1143,6 +1293,8 @@ Rules:
             fetch_method = "gnews_api"
         elif any("finnhub" in src for src in source_values):
             fetch_method = "finnhub_api"
+        elif any("firecrawl" in src for src in source_values):
+            fetch_method = "firecrawl_api"
         elif enriched_articles:
             fetch_method = "newsdata_api"
         else:

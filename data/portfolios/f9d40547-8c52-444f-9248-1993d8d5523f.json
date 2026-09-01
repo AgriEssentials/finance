@@ -18,23 +18,23 @@
       "symbol": "INFY.NS",
       "shares": 23,
       "avg_cost": 543.0,
-      "current_price": 1240.5999755859375,
-      "current_value": 28533.799438476562,
-      "unrealized_pnl": 16044.799438476562,
-      "unrealized_pnl_percent": 128.47145038415056,
+      "current_price": 1133.800048828125,
+      "current_value": 26077.401123046875,
+      "unrealized_pnl": 13588.401123046875,
+      "unrealized_pnl_percent": 108.80295558529005,
       "sector": null,
-      "last_updated": "2026-04-23T15:39:40.244734"
+      "last_updated": "2026-08-31T23:02:07.134313"
     },
     {
       "symbol": "ICICIBANK.NS",
       "shares": 1,
       "avg_cost": 1350.0,
-      "current_price": 1348.0,
-      "current_value": 1348.0,
-      "unrealized_pnl": -2.0,
-      "unrealized_pnl_percent": -0.14814814814814814,
+      "current_price": 1454.0,
+      "current_value": 1454.0,
+      "unrealized_pnl": 104.0,
+      "unrealized_pnl_percent": 7.703703703703704,
       "sector": "Financial",
-      "last_updated": "2026-04-23T15:39:40.287685"
+      "last_updated": "2026-08-31T23:02:07.191170"
     }
   ],
   "transactions": [
@@ -66,5 +66,5 @@
       "total_amount": 1350.0
     }
   ],
-  "last_saved": "2026-04-23T15:39:40.288300"
+  "last_saved": "2026-08-31T23:02:07.194440"
 }

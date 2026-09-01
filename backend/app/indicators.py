@@ -4,9 +4,15 @@ Handles calculation of all technical indicators for stock analysis
 """
 
 import pandas as pd
-import pandas_ta as ta
 import numpy as np
 from typing import Dict, Any, Optional
+
+# Prefer pandas_ta when available; fall back to pure-pandas implementations
+# (needed on Python 3.14+ where numba/pandas_ta cannot be installed).
+try:
+    import pandas_ta as ta
+except ImportError:
+    from app import ta_fallback as ta
 
 
 class TechnicalIndicators:
@@ -40,7 +46,19 @@ class TechnicalIndicators:
     
     def calculate_bollinger_bands(self, period: int = 20, std: int = 2) -> pd.DataFrame:
         """Calculate Bollinger Bands"""
-        return ta.bbands(self.df['Close'], length=period, std=std)
+        bb = ta.bbands(self.df['Close'], length=period, std=std)
+        # Normalize column names across pandas_ta versions
+        rename = {}
+        for col in bb.columns:
+            low = col.lower()
+            if low.startswith('bbl'):
+                rename[col] = f'BBL_{period}_{float(std)}'
+            elif low.startswith('bbm'):
+                rename[col] = f'BBM_{period}_{float(std)}'
+            elif low.startswith('bbu'):
+                rename[col] = f'BBU_{period}_{float(std)}'
+        bb = bb.rename(columns=rename)
+        return bb
     
     def detect_volume_spike(self, period: int = 20, threshold: float = 1.5) -> pd.Series:
         """Detect volume spikes"""
@@ -129,9 +147,9 @@ class TechnicalIndicators:
         self.df['MACD_Histogram'] = macd_df['MACDh_12_26_9']
         
         bb_df = self.calculate_bollinger_bands()
-        self.df['BB_Upper'] = bb_df['BBU_20_2.0_2.0']
-        self.df['BB_Lower'] = bb_df['BBL_20_2.0_2.0']
-        self.df['BB_Middle'] = bb_df['BBM_20_2.0_2.0']
+        self.df['BB_Upper'] = bb_df['BBU_20_2.0']
+        self.df['BB_Lower'] = bb_df['BBL_20_2.0']
+        self.df['BB_Middle'] = bb_df['BBM_20_2.0']
         
         self.df['ATR'] = self.calculate_atr(14)
         

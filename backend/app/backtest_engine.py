@@ -209,7 +209,10 @@ def simple_momentum_strategy(df: pd.DataFrame, index: int, short_window: int = 2
 
 def rsi_strategy(df: pd.DataFrame, index: int, oversold: int = 30, overbought: int = 70) -> str:
     """RSI-based mean reversion strategy"""
-    import pandas_ta as ta
+    try:
+        import pandas_ta as ta
+    except ImportError:
+        from app import ta_fallback as ta
     
     if len(df) < 14:
         return 'hold'
@@ -228,7 +231,10 @@ def rsi_strategy(df: pd.DataFrame, index: int, oversold: int = 30, overbought: i
 
 def macd_strategy(df: pd.DataFrame, index: int) -> str:
     """MACD crossover strategy"""
-    import pandas_ta as ta
+    try:
+        import pandas_ta as ta
+    except ImportError:
+        from app import ta_fallback as ta
     
     if len(df) < 35:
         return 'hold'

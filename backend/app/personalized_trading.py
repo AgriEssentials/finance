@@ -628,7 +628,8 @@ class AICoach:
 
     def __init__(self, supabase: SupabaseManager):
         self.supabase = supabase
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY", "")
+        self.groq_api_key = os.getenv("GROQ_API_KEY", "")
+        self.groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 
     def generate_coaching_advice(self, user_id: str) -> Dict[str, Any]:
         """Generate personalized coaching advice using AI"""
@@ -650,7 +651,7 @@ class AICoach:
             "trade_performance": trade_analysis if "error" not in trade_analysis else None
         }
 
-        # Generate advice using Gemini or fallback
+        # Generate advice using Groq or fallback
         advice = self._generate_ai_advice(context)
 
         return {
@@ -663,8 +664,8 @@ class AICoach:
 
     def _generate_ai_advice(self, context: Dict) -> str:
         """Generate AI coaching advice"""
-        # Try Gemini first
-        if self.gemini_api_key:
+        # Try Groq first
+        if self.groq_api_key:
             try:
                 import requests
 
@@ -678,19 +679,29 @@ Portfolio Value: ₹{context['portfolio_value']:,}
 
 Provide 3 specific, actionable recommendations for improvement. Be encouraging but honest about areas for improvement."""
 
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={self.gemini_api_key}"
+                url = "https://api.groq.com/openai/v1/chat/completions"
+                headers = {
+                    "Authorization": f"Bearer {self.groq_api_key}",
+                    "Content-Type": "application/json"
+                }
                 payload = {
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {"temperature": 0.7, "maxOutputTokens": 500}
+                    "model": self.groq_model,
+                    "messages": [
+                        {"role": "system", "content": "You are an expert trading coach. Provide clear, actionable advice."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 500
                 }
 
-                response = requests.post(url, json=payload, timeout=15)
+                response = requests.post(url, json=payload, headers=headers, timeout=15)
                 if response.status_code == 200:
                     result = response.json()
-                    text = result.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                    return text
+                    text = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    if text:
+                        return text
             except Exception as e:
-                print(f"[WARNING] Gemini coach failed: {e}")
+                print(f"[WARNING] Groq coach failed: {e}")
 
         # Fallback advice
         return self._generate_fallback_advice(context)

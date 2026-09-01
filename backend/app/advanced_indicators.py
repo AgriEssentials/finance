@@ -222,7 +222,10 @@ class AdvancedTechnicalAnalyzer:
         Returns:
             Dictionary with trend strength metrics
         """
-        import pandas_ta as ta
+        try:
+            import pandas_ta as ta
+        except ImportError:
+            from app import ta_fallback as ta
         
         # Calculate ADX
         adx = ta.adx(self.df['High'], self.df['Low'], self.df['Close'], length=14)
@@ -277,7 +280,10 @@ class AdvancedTechnicalAnalyzer:
         Returns:
             Dictionary with detected divergences
         """
-        import pandas_ta as ta
+        try:
+            import pandas_ta as ta
+        except ImportError:
+            from app import ta_fallback as ta
         
         # Calculate RSI and MACD
         rsi = ta.rsi(self.df['Close'], length=14)

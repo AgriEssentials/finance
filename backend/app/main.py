@@ -168,7 +168,32 @@ async def startup_event():
     rt_data.start()
     print("[STARTUP] Real-time market data engine started")
     
+    # Seed RAG document corpus (non-blocking - runs in background)
+    import asyncio
+    asyncio.create_task(_seed_rag_corpus())
+    asyncio.create_task(_warm_models())
+    
     print("Application started successfully")
+
+async def _seed_rag_corpus():
+    """Background task to seed the RAG corpus for the multi-agent system."""
+    try:
+        from app.agents.rag import ensure_corpus_seeded
+        result = ensure_corpus_seeded()
+        print(f"[STARTUP] RAG corpus seeded: {result}")
+    except Exception as e:
+        print(f"[STARTUP] RAG corpus seed failed: {e}")
+
+async def _warm_models():
+    """Background task to warm heavyweight models so first requests are fast."""
+    try:
+        # Warm sentiment transformer in the main thread to avoid the 60s
+        # lazy-load timeout that otherwise hits the first worker thread.
+        from app.sentiment import sentiment_analyzer
+        sentiment_analyzer._ensure_transformer_loaded()
+        print("[STARTUP] Sentiment transformer warm")
+    except Exception as e:
+        print(f"[STARTUP] Model warm failed: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -1448,7 +1473,8 @@ async def get_landing_data(force_refresh: bool = False):
         # API key status
         api_keys = {
             "sarvam": bool(os.environ.get("SARVAM_API_KEY")),
-            "gemini": bool(os.environ.get("GEMINI_API_KEY")),
+            "groq": bool(os.environ.get("GROQ_API_KEY")),
+            "firecrawl": bool(os.environ.get("FIRECRAWL_API_KEY")),
             "finnhub": bool(os.environ.get("FINNHUB_API_KEY")),
             "gnews": bool(os.environ.get("GNEWS_API_KEY")),
             "newsdata": bool(os.environ.get("NEWS_API_KEY")),
@@ -3008,7 +3034,8 @@ async def get_data_sources_status(
 
         # Check API Keys
         sarvam_key = os.getenv('SARVAM_API_KEY', '')
-        gemini_key = os.getenv('GEMINI_API_KEY', '')
+        groq_key = os.getenv('GROQ_API_KEY', '')
+        firecrawl_key = os.getenv('FIRECRAWL_API_KEY', '')
         news_key = os.getenv('NEWSDATA_API_KEY', '') or os.getenv('NEWS_API_KEY', '')
 
         # Mask sensitive parts
@@ -3068,12 +3095,12 @@ async def get_data_sources_status(
                     ],
                     'coverage': 'All market news and analysis'
                 },
-                'gemini_ai': {
-                    'name': 'Google Gemini',
+                'groq_ai': {
+                    'name': 'Groq (Llama)',
                     'type': 'AI Analysis & Predictions',
-                    'status': 'ACTIVE' if gemini_key else 'CONFIGURED',
-                    'api_key': mask_key(gemini_key),
-                    'model': os.getenv('GEMINI_MODEL', 'gemini-2.5-flash'),
+                    'status': 'ACTIVE' if groq_key else 'CONFIGURED',
+                    'api_key': mask_key(groq_key),
+                    'model': os.getenv('GROQ_MODEL', 'openai/gpt-oss-120b'),
                     'update_frequency': 'On-demand (2-10 seconds)',
                     'data_provided': [
                         'AI price predictions',
@@ -3082,6 +3109,20 @@ async def get_data_sources_status(
                         'Risk assessment',
                         'Strategy suggestions',
                         'Real-time inference'
+                    ],
+                    'coverage': 'All analyzed stocks'
+                },
+                'firecrawl': {
+                    'name': 'Firecrawl',
+                    'type': 'Stock-Specific News Search & Scraping',
+                    'status': 'ACTIVE' if firecrawl_key else 'CONFIGURED',
+                    'api_key': mask_key(firecrawl_key),
+                    'update_frequency': 'On-demand (2-10 seconds)',
+                    'data_provided': [
+                        'Stock-specific news search',
+                        'Article content scraping',
+                        'LLM-ready markdown extraction',
+                        'Real-time news sentiment input'
                     ],
                     'coverage': 'All analyzed stocks'
                 },
@@ -3147,11 +3188,16 @@ async def get_data_sources_status(
                     'status': 'ACTIVE' if sarvam_key else 'NOT_CONFIGURED',
                     'key_preview': mask_key(sarvam_key)
                 },
-                'gemini_api': {
-                    'configured': bool(gemini_key),
-                    'status': 'ACTIVE' if gemini_key else 'NOT_CONFIGURED',
-                    'model': os.getenv('GEMINI_MODEL', 'gemini-2.5-flash'),
-                    'key_preview': mask_key(gemini_key)
+                'groq_api': {
+                    'configured': bool(groq_key),
+                    'status': 'ACTIVE' if groq_key else 'NOT_CONFIGURED',
+                    'model': os.getenv('GROQ_MODEL', 'openai/gpt-oss-120b'),
+                    'key_preview': mask_key(groq_key)
+                },
+                'firecrawl_api': {
+                    'configured': bool(firecrawl_key),
+                    'status': 'ACTIVE' if firecrawl_key else 'NOT_CONFIGURED',
+                    'key_preview': mask_key(firecrawl_key)
                 },
                 'newsdata_api': {
                     'configured': bool(news_key),
@@ -3187,7 +3233,7 @@ async def get_data_sources_status(
                 {
                     'step': 4,
                     'name': 'Prediction',
-                    'description': 'Gemini AI generates predictions based on current market state',
+                    'description': 'Groq AI generates predictions based on current market state',
                     'status': 'ACTIVE'
                 },
                 {
@@ -5512,4 +5558,170 @@ async def get_cache_warm_status(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error checking cache status: {str(e)}")
+
+
+# ==================== PS-01 MULTI-AGENT SYSTEM ENDPOINTS ====================
+# Multi-Agent Autonomous Financial Intelligence System for Retail Investors
+
+@app.get("/agent-insights.html")
+async def serve_agent_insights():
+    """Serve the multi-agent reasoning-trace workspace page"""
+    insights_path = os.path.join(frontend_dir, "agent-insights.html")
+    if not os.path.exists(insights_path):
+        return {"detail": "Page not found", "path": insights_path}
+    return FileResponse(insights_path)
+
+
+@app.get("/api/v2/agents/roles")
+async def agents_roles():
+    """List the specialized agents, their roles and output contracts."""
+    from app.agents.orchestrator import get_orchestrator
+
+    orch = get_orchestrator()
+    return {
+        "framework": "Multi-Agent Orchestration Framework",
+        "parallelism": "ThreadPoolExecutor - all specialized agents dispatched concurrently",
+        "synthesis": "Weighted composite synthesis layer consuming structured agent contracts",
+        "agents": orch.agent_roles,
+        "output_contract": {
+            "agent_id": "str",
+            "agent_name": "str",
+            "role": "str",
+            "status": "ok|degraded|failed",
+            "latency_ms": "float",
+            "confidence": "0-100",
+            "score": "0-100",
+            "recommendation": "BUY|HOLD|SELL",
+            "summary": "str",
+            "key_factors": "list[str]",
+            "citations": "list[Citation]",
+            "evidence": "dict",
+        },
+    }
+
+
+@app.get("/api/v2/agents/analyze")
+async def agents_analyze(
+    symbol: str = Query(..., description="Stock symbol (e.g., RELIANCE.NS)"),
+    mode: str = Query("swing", description="intraday | swing | longterm"),
+    query: Optional[str] = Query(None, description="Natural language question for the RAG grounder"),
+    risk_tolerance: Optional[str] = Query(None, description="Override profile risk: low | medium | high"),
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional)
+):
+    """
+    End-to-end PS-01 demo: raw data ingestion -> parallel multi-agent reasoning
+    -> synthesized, explainable, cited recommendation -> session performance log.
+    """
+    if mode not in ["intraday", "swing", "longterm"]:
+        raise HTTPException(status_code=400, detail="Mode must be intraday, swing, or longterm")
+
+    user_id = current_user.id if current_user else "demo"
+    user_profile: Optional[Dict[str, Any]] = None
+    portfolio_context: Optional[Dict[str, Any]] = None
+
+    if current_user:
+        try:
+            profile = supabase_manager.get_user_profile(current_user.id)
+            if profile:
+                user_profile = {
+                    "risk_tolerance": profile.risk_tolerance,
+                    "preferred_strategy": profile.preferred_strategy,
+                    "capital": profile.capital,
+                }
+            positions = supabase_manager.get_portfolio(current_user.id)
+            if positions:
+                portfolio_context = {
+                    "holdings": [
+                        {
+                            "symbol": p.symbol,
+                            "current_value": (p.current_price or p.avg_price) * p.quantity,
+                        }
+                        for p in positions
+                    ]
+                }
+        except Exception as e:
+            print(f"[AGENTS] Profile load failed (using defaults): {e}")
+
+    if risk_tolerance:
+        user_profile = user_profile or {}
+        user_profile["risk_tolerance"] = risk_tolerance
+
+    try:
+        from app.agents.orchestrator import get_orchestrator
+
+        orch = get_orchestrator()
+        result = orch.run_analysis(
+            symbol=symbol,
+            mode=mode,
+            user_profile=user_profile,
+            portfolio_context=portfolio_context,
+            query=query,
+            user_id=user_id,
+        )
+        return jsonable_encoder(result)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Multi-agent analysis error: {str(e)}")
+
+
+@app.get("/api/v2/agents/rag/search")
+async def rag_search(
+    query: str = Query(..., description="Natural language query"),
+    symbol: Optional[str] = Query(None, description="Filter by stock symbol"),
+    top_k: int = Query(5, ge=1, le=20),
+    doc_types: Optional[str] = Query(None, description="Comma-separated: news,filing,announcement,transcript"),
+):
+    """Semantic search over the persisted document corpus (RAG)."""
+    from app.agents.rag import search_corpus
+
+    types = [t.strip() for t in doc_types.split(",")] if doc_types else None
+    results = search_corpus(query, symbol=symbol, top_k=top_k, doc_types=types)
+    return {"query": query, "results": results, "count": len(results)}
+
+
+@app.get("/api/v2/agents/rag/corpus")
+async def rag_corpus():
+    """Corpus stats + recent documents."""
+    from app.agents.rag import corpus, ensure_corpus_seeded
+
+    ensure_corpus_seeded()
+    return {
+        "stats": corpus.stats(),
+        "documents": corpus.list_docs(limit=25),
+    }
+
+
+@app.post("/api/v2/agents/rag/ingest")
+async def rag_ingest(force: bool = Query(False, description="Force full re-seed and re-embed")):
+    """Re-seed/refresh the RAG corpus from filings, announcements and news."""
+    from app.agents.rag import ensure_corpus_seeded
+
+    result = ensure_corpus_seeded(force=force)
+    return result
+
+
+@app.get("/api/v2/agents/performance")
+async def agents_performance(
+    limit: int = Query(30, ge=1, le=100),
+    current_user: Optional[SupabaseUser] = Depends(get_current_user_optional),
+):
+    """
+    Session performance log: signal accuracy vs forward return, agent latency,
+    and portfolio risk-concentration score (PS-01 minimum requirement).
+    """
+    from app.agents.performance import get_performance_logs, get_performance_summary
+
+    user_id = current_user.id if current_user else None
+    logs = get_performance_logs(user_id=user_id, limit=limit)
+    summary = get_performance_summary()
+    return {"summary": summary, "logs": logs}
+
+
+@app.post("/api/v2/agents/performance/evaluate")
+async def agents_performance_evaluate(days: int = Query(30, ge=1, le=90)):
+    """Evaluate logged signals against forward returns after `days` days."""
+    from app.agents.performance import evaluate_forward_returns
+
+    return evaluate_forward_returns(days=days)
 

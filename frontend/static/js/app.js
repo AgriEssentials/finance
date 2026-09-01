@@ -1102,7 +1102,7 @@ const bootMessages = [
     "[NLP] Sarvam API authenticating...",
     "[MATH] Calculating Kelly Criterion...",
     "[RISK] Adjusting Volatility Stop Loss...",
-    "[API] Gemini Neural Engine locked and loaded.",
+    "[API] Groq Neural Engine locked and loaded.",
     "[SYS] Integrating composite score... STANDBY"
 ];
 

@@ -5,7 +5,7 @@ Handles real-time parsing of SEBI filings and corporate announcements.
 Features:
 1. Real-time scraping of NSE corporate announcements
 2. PDF parsing for earnings reports
-3. LLM-powered flash analysis using Gemini/Kimi
+3. LLM-powered flash analysis using Groq
 4. Personalized impact assessment based on user portfolio
 """
 
@@ -18,13 +18,6 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
-
-# Import Gemini for LLM analysis
-try:
-    import google.generativeai as genai
-    GEMINI_AVAILABLE = True
-except ImportError:
-    GEMINI_AVAILABLE = False
 
 
 class AnnouncementType(Enum):
@@ -114,16 +107,12 @@ class NSEAnnouncementsParser:
     MERGER_KEYWORDS = ['merger', 'amalgamation', 'demerger']
     
     def __init__(self):
-        self.gemini_api_key = os.getenv('GEMINI_API_KEY')
+        self.groq_api_key = os.getenv('GROQ_API_KEY')
+        self.groq_model = os.getenv('GROQ_MODEL', 'openai/gpt-oss-120b')
+        self.groq_url = "https://api.groq.com/openai/v1/chat/completions"
         self.last_check = datetime.now() - timedelta(hours=1)
         self.cache: Dict[str, CorporateAnnouncement] = {}
         self._session: Optional[aiohttp.ClientSession] = None
-        
-        if GEMINI_AVAILABLE and self.gemini_api_key:
-            genai.configure(api_key=self.gemini_api_key)
-            self.gemini_model = genai.GenerativeModel('gemini-2.5-flash')
-        else:
-            self.gemini_model = None
     
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session"""
@@ -328,14 +317,51 @@ class NSEAnnouncementsParser:
         else:
             return ImpactLevel.LOW
     
+    async def _call_groq(self, prompt: str, system_prompt: str) -> Optional[str]:
+        """Call Groq's chat completions API and return the assistant text."""
+        if not self.groq_api_key:
+            return None
+
+        headers = {
+            "Authorization": f"Bearer {self.groq_api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": self.groq_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.3,
+            "max_tokens": 500
+        }
+
+        try:
+            session = await self._get_session()
+            async with session.post(
+                self.groq_url, headers=headers, json=payload,
+                timeout=aiohttp.ClientTimeout(total=15)
+            ) as response:
+                if response.status != 200:
+                    print(f"[NSE PARSER] Groq API error: {response.status} - {response.text[:200] if hasattr(response, 'text') else ''}")
+                    return None
+                data = await response.json()
+                choices = data.get("choices", [])
+                if not choices:
+                    return None
+                return choices[0].get("message", {}).get("content")
+        except Exception as e:
+            print(f"[NSE PARSER] Groq call failed: {e}")
+            return None
+
     async def generate_flash_analysis(self, announcement: CorporateAnnouncement) -> str:
         """
         Generate AI-powered flash analysis of announcement.
         
-        Uses Gemini/Kimi to quickly interpret the announcement before
+        Uses Groq to quickly interpret the announcement before
         the market can react.
         """
-        if not self.gemini_model:
+        if not self.groq_api_key:
             return "AI analysis unavailable. Please check announcement details manually."
         
         try:
@@ -356,9 +382,13 @@ Provide a concise analysis in this format:
 
 Keep it under 150 words. Be specific and actionable."""
 
-            response = self.gemini_model.generate_content(prompt)
-            analysis = response.text
+            analysis = await self._call_groq(
+                prompt,
+                system_prompt="You are a professional stock market analyst specializing in NSE corporate announcements."
+            )
             
+            if not analysis:
+                return "Unable to generate AI analysis at this time."
             return analysis
             
         except Exception as e:

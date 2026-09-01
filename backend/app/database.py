@@ -291,6 +291,62 @@ class EconomicEvent(Base):
         Index('idx_event_date_country', 'event_date', 'country'),
     )
 
+class RagDocument(Base):
+    """Persisted document corpus for Retrieval-Augmented Generation (PS-01).
+
+    Holds news articles, corporate announcements and financial disclosures
+    that are embedded and searched semantically to ground agent outputs in
+    retrieved source material with visible attribution.
+    """
+    __tablename__ = "rag_documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    source_id = Column(String(255), unique=True, index=True, nullable=False)
+    symbol = Column(String(50), index=True)
+    doc_type = Column(String(50), default="news")  # news | filing | announcement | transcript
+    title = Column(String(500), nullable=False)
+    content = Column(Text, nullable=False)
+    source = Column(String(100), default="")
+    url = Column(String(1000))
+    published_at = Column(String(100))
+    embedding_model = Column(String(100), default="tfidf")
+    embedding = Column(Text)  # JSON-serialized vector
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_rag_symbol_type', 'symbol', 'doc_type'),
+    )
+
+class PerformanceLog(Base):
+    """Session-level performance metrics (PS-01).
+
+    Captures at least three measurable metrics per session:
+      1. signal accuracy vs 30-day forward return
+      2. agent response latency
+      3. portfolio risk-concentration score
+    """
+    __tablename__ = "performance_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String(100), unique=True, index=True, nullable=False)
+    user_id = Column(String(255), index=True, nullable=False)
+    symbol = Column(String(50), index=True, nullable=False)
+    signal_type = Column(String(20), nullable=False)  # buy | sell | hold | ...
+    composite_score = Column(Float, nullable=False)
+    confidence = Column(Float, nullable=False)
+    total_latency_ms = Column(Float, nullable=False)
+    agent_latencies_ms = Column(JSON, default={})
+    risk_concentration_score = Column(Float, default=0.0)
+    degraded_agents = Column(JSON, default=[])
+    forward_return_pct = Column(Float)
+    signal_accurate = Column(Boolean)
+    recorded_at = Column(DateTime, default=datetime.utcnow, index=True)
+    evaluated_at = Column(DateTime)
+
+    __table_args__ = (
+        Index('idx_perf_user_time', 'user_id', 'recorded_at'),
+    )
+
 # Create all tables
 def create_tables():
     Base.metadata.create_all(bind=engine)
