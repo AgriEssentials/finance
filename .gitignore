@@ -1,0 +1,212 @@
+# Environment and Config
+.env
+.env.local
+.env.*.local
+.env.example
+
+# Virtual Environment
+.venv/
+venv/
+env/
+ENV/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDE and Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+*.iml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+*.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Node.js and Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+.next/
+out/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+stock_analyzer.db
+
+# Local user data / audit logs
+data/audit_logs/
+
+# Logs
+*.log
+app.log
+server.log
+app_run.log
+*.log.*
+
+# Temporary files
+*.tmp
+*.bak
+update.txt
+nul
+
+# OS specific
+Thumbs.db
+.DS_Store
+*.swp
+*.swo
+
+# Build outputs
+/build/
+/dist/
+
+# Testing
+.coverage
+htmlcov/
+
+# Project specific
+.claude/
+__pycache__/
+*.pyc
+
+# Documentation (keep main README, remove duplicate docs)
+# Keeping only README.md for documentation
+QUICK_START.md
+QUICK_START_GUIDE.md
+QUICK_START_PROFESSIONAL.md
+START_HERE.md
+READ_ME_FIRST.md
+COMPLETE_README.md
+README_MASTER.md
+MASTER_AI_GUIDE.md
+COMPREHENSIVE_README.md
+SETUP.md
+
+# Fix and Debug Documentation (temporary)
+ADVANCED_AI_FEATURES.md
+AI_FEATURES_COMPLETE_INDEX.md
+AI_INTEGRATION_GUIDE.md
+AI_QUICK_START.md
+ALL_BUTTONS_INSPECTION.md
+API_ENDPOINTS_NEW.md
+APP_COMPLETE_AND_TESTED.md
+APP_HANGING_FIXED.md
+APP_READY_TO_USE.md
+ARTICLE_REDIRECT_VERIFICATION.md
+BROKER_REPLACEMENT_FEATURES.md
+COMPLETE_APP_FINAL_STATUS.md
+COMPLETE_DASHBOARD_FIX.md
+COMPLETE_FINAL_CHECKLIST.md
+COMPLETE_FIX_REPORT.md
+COMPLETE_GUIDE.md
+COPY_PASTE_COMMANDS.md
+DASHBOARD_FEATURES_FIX.md
+DASHBOARD_FIXES_INDEX.md
+DASHBOARD_FIXES_QUICK_FIX.md
+DASHBOARD_FIXES_SUMMARY.md
+DEBUG_DASHBOARD.md
+DEPLOYMENT_CHECKLIST.md
+DEPLOYMENT_READY.md
+DOCUMENTATION_INDEX.md
+DOCUMENTATION_MAP.md
+EMERGENCY_TROUBLESHOOTING.md
+EVENT_LISTENER_FIX.md
+FEATURE_COMPLETE_SUMMARY.md
+FILES_CREATED_MANIFEST.md
+FINAL_ARTICLE_REDIRECT_COMPLETE.md
+FINAL_COMPLETION_REPORT.md
+FINAL_IMPLEMENTATION_STATUS.md
+FINAL_STATUS.md
+FINAL_STATUS_READY.md
+FINAL_VERIFICATION_COMPLETE.md
+FIXED_APP_HANGING.md
+FIXED_NO_MORE_SAMPLE_SOURCE.md
+HOW_TO_START_APP.md
+HTML_404_FIX.md
+IMPLEMENTATION_CHECKLIST.md
+IMPLEMENTATION_SUMMARY.md
+IMPROVEMENTS_SUMMARY.md
+INSTITUTIONAL_DASHBOARD_FIXED.md
+JUST_COPY_PASTE_THIS.md
+LOGIN_FIX.md
+NEWS_ARTICLES_CLICKABLE_FIXED.md
+NEWS_ARTICLES_USAGE_GUIDE.md
+NEWS_ARTICLE_DETAIL_FEATURE.md
+NEWS_FEATURE.md
+NEWS_SECTION_RESTORED.md
+NEWS_SENTIMENT_FEATURE_GUIDE.md
+ONLY_REAL_ARTICLES.md
+PERFORMANCE_OPTIMIZATION_GUIDE.md
+PERSONALIZED_TRADING.md
+PORT_8000_FIX.md
+PROFESSIONAL_FEATURES.md
+PROJECT_COMPLETION_SUMMARY.md
+QUICK_REFERENCE.md
+QUICK_REFERENCE_ARTICLE_REDIRECT.md
+REALTIME_API_ENDPOINTS.md
+REALTIME_COMPLETE_OVERVIEW.md
+REALTIME_DATA_FEATURES.md
+REALTIME_DATA_GUIDE.md
+REAL_NEWS_FIX_COMPLETE.md
+SENTIMENT_ANALYSIS_COMPLETE.md
+SOLUTION_IMPLEMENTED.md
+STOCK_SPECIFIC_SENTIMENT.md
+VERIFICATION_REPORT.md
+VISUAL_GUIDE.md
+
+# Test and Debug Scripts (optional - keep if needed for CI/CD)
+test_*.py
+debug_*.py
+run_debug.py
+run_tests.py
+complete_app_test.py
+final_verification.py
+full_integration_test.py
+full_test.py
+quick_test.py
+verify_*.py
+
+# Batch scripts (Windows specific)
+*.bat
+
+# Word documents
+*.docx
+
+# HTML test files
+test_api.html
+

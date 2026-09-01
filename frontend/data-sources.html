@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Data Sources | AI Quant Terminal</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/pro-theme.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        .data-sources-container { max-width: 1400px; margin: 0 auto; padding: 20px; width: 100%; }
+        
+        .sources-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 40px; }
+        
+        .source-card { 
+            position: relative; 
+            overflow: hidden; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 15px;
+        }
+        
+        .source-type { 
+            padding: 4px 10px; 
+            background: rgba(99, 102, 241, 0.1); 
+            color: var(--primary); 
+            border: 1px solid rgba(99, 102, 241, 0.2); 
+            font-size: 0.7rem; 
+            text-transform: uppercase; 
+            font-weight: 700;
+            border-radius: 4px;
+            width: fit-content;
+        }
+
+        .data-features { 
+            list-style: none; 
+            padding: 0; 
+            margin: 10px 0; 
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .data-features li { 
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-secondary); 
+            font-size: 0.85rem; 
+        }
+        .data-features li::before { 
+            content: "✓"; 
+            color: var(--success); 
+            font-weight: 900;
+        }
+        
+        .update-frequency { 
+            background: rgba(255,255,255,0.03); 
+            padding: 12px; 
+            border-radius: 8px;
+            font-size: 0.75rem; 
+            color: var(--info); 
+            font-weight: 600;
+            margin-top: auto;
+        }
+
+        .realtime-indicator { 
+            width: 10px; height: 10px; 
+            background: var(--success); 
+            border-radius: 50%; 
+            box-shadow: 0 0 10px var(--success);
+            animation: pulse 2s infinite; 
+        }
+        @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.1); } 100% { opacity: 1; transform: scale(1); } }
+        
+        @media (max-width: 768px) {
+            .data-sources-container { padding: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">AI</div>
+                <div class="logo-text">
+                    <h1>AI Quant Terminal</h1>
+                    <p>Professional Market Intelligence</p>
+                </div>
+            </div>
+            <nav class="main-nav">
+                <a href="/" class="nav-link">Home</a>
+                <a href="/dashboard.html" class="nav-link">Dashboard</a>
+                <a href="/analysis.html" class="nav-link">Analysis</a>
+                <a href="/portfolio.html" class="nav-link">Portfolio</a>
+                <a href="/data-sources.html" class="nav-link active">Data Sources</a>
+            </nav>
+            <div class="header-actions" id="header-actions">
+                <a href="/auth.html" class="nav-chip">Login</a>
+            </div>
+        </header>
+
+        <main class="data-sources-main slide-up">
+            <div class="data-sources-container">
+                <!-- Hero Header -->
+                <div class="dashboard-panel box-glow" style="padding: 40px; margin-bottom: 30px; text-align: center;">
+                    <h2 style="font-size: 2.5rem; letter-spacing: -1px; margin-bottom: 10px;">Institutional Intelligence</h2>
+                    <p style="color: var(--text-secondary); max-width: 600px; margin: 0 auto;">Powering your trading with high-fidelity, real-time data from global financial nodes.</p>
+                    <div style="margin-top: 25px; display: flex; justify-content: center; align-items: center; gap: 10px;">
+                        <span class="realtime-indicator"></span>
+                        <span style="font-family: var(--font-mono); font-size: 0.8rem; letter-spacing: 2px; color: var(--success); font-weight: 700;">LIVE CONNECTIVITY ACTIVE</span>
+                    </div>
+                </div>
+
+                <!-- Main Data Sources -->
+                <div class="sources-grid">
+                    <!-- Yahoo Finance -->
+                    <div class="dashboard-panel source-card box-glow">
+                        <div class="panel-header" style="justify-content: flex-start; gap: 15px;">
+                            <span style="font-size: 1.5rem;">📈</span>
+                            <h3>Yahoo Finance</h3>
+                        </div>
+                        <div class="source-type">Primary Exchange Feed</div>
+                        <p style="font-size: 0.9rem; color: var(--text-secondary);">Direct market data for Indian Equities, Indices, and Historical Benchmarks.</p>
+                        <ul class="data-features">
+                            <li>Real-time NSE/BSE Pricing</li>
+                            <li>Multi-year Historical OHLCV</li>
+                            <li>Financial Statements & Metrics</li>
+                            <li>Market Cap & Float Analysis</li>
+                        </ul>
+                        <div class="update-frequency">⏱ Frequency: Real-time (Market Hours)</div>
+                    </div>
+
+                    <!-- NewsData.io -->
+                    <div class="dashboard-panel source-card box-glow">
+                        <div class="panel-header" style="justify-content: flex-start; gap: 15px;">
+                            <span style="font-size: 1.5rem;">📰</span>
+                            <h3>News Intelligence</h3>
+                        </div>
+                        <div class="source-type">Global News Aggregator</div>
+                        <p style="font-size: 0.9rem; color: var(--text-secondary);">Processing high-impact financial news from 500+ Indian media outlets.</p>
+                        <ul class="data-features">
+                            <li>Real-time Newswire Feed</li>
+                            <li>Stock-Specific Keyword Tagging</li>
+                            <li>Official Corporate Announcements</li>
+                            <li>Macro-Economic Event Tracking</li>
+                        </ul>
+                        <div class="update-frequency">⏱ Frequency: Continuous Updates</div>
+                    </div>
+
+                    <!-- Sarvam AI -->
+                    <div class="dashboard-panel source-card box-glow">
+                        <div class="panel-header" style="justify-content: flex-start; gap: 15px;">
+                            <span style="font-size: 1.5rem;">🧠</span>
+                            <h3>Sarvam AI</h3>
+                        </div>
+                        <div class="source-type">Sentiment Engine</div>
+                        <p style="font-size: 0.9rem; color: var(--text-secondary);">Localized NLP models trained for Indian market nuances and languages.</p>
+                        <ul class="data-features">
+                            <li>Localized Sentiment Analysis</li>
+                            <li>Breaking News Correlation</li>
+                            <li>Contextual Financial NLP</li>
+                            <li>Multilingual Support (Indic)</li>
+                        </ul>
+                        <div class="update-frequency">⏱ Frequency: Immediate Inference</div>
+                    </div>
+
+                    <!-- Groq AI -->
+                    <div class="dashboard-panel source-card box-glow">
+                        <div class="panel-header" style="justify-content: flex-start; gap: 15px;">
+                            <span style="font-size: 1.5rem;">✨</span>
+                            <h3>Groq AI</h3>
+                        </div>
+                        <div class="source-type">Predictive Model</div>
+                        <p style="font-size: 0.9rem; color: var(--text-secondary);">Advanced reasoning for pattern recognition and algorithmic trade setup.</p>
+                        <ul class="data-features">
+                            <li>Technical Pattern Discovery</li>
+                            <li>Complex Scenario Modeling</li>
+                            <li>Risk/Reward Calculations</li>
+                            <li>Institutional Alpha Strategies</li>
+                        </ul>
+                        <div class="update-frequency">⏱ Frequency: On-Demand Analysis</div>
+                    </div>
+                </div>
+
+                <!-- System Performance Metrics -->
+                <div class="dashboard-panel box-glow" style="padding: 30px; margin-bottom: 40px;">
+                    <div class="panel-header"><h3>TERMINAL TELEMETRY</h3></div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; margin-top: 20px;">
+                        <div class="metric-card">
+                            <div class="metric-label">Avg. Latency</div>
+                            <div class="metric-value" style="color: var(--success);">&lt; 350ms</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Data Uptime</div>
+                            <div class="metric-value" style="color: var(--info);">99.98%</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">News Sources</div>
+                            <div class="metric-value">500+</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Historical Depth</div>
+                            <div class="metric-value">10Y+</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Bar -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <a href="/" class="btn-secondary" style="text-decoration: none; text-align: center; justify-content: center; height: 50px;">
+                        ← RETURN HOME
+                    </a>
+                    <a href="/analysis.html" class="btn-primary" style="text-decoration: none; text-align: center; justify-content: center; height: 50px;">
+                        LAUNCH ANALYSIS →
+                    </a>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer slide-up" style="margin-top: 60px; padding-bottom: 40px; border-top: 1px solid rgba(255,255,255,0.05);">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 40px; padding-top: 40px;">
+                <div>
+                   <h4 style="color: #fff; margin-bottom: 15px;">Safety & Governance</h4>
+                   <p style="font-size: 0.8rem; line-height: 1.6; color: var(--text-muted);">This terminal is an educational playground for quantitative research. All data is real-time but should not be the sole basis for financial decisions. We utilize multiple redundent data points to ensure peak accuracy.</p>
+                </div>
+                <div style="text-align: right;">
+                    <p style="color: var(--text-secondary); font-size: 0.8rem;">Powered by Quant Terminal V2</p>
+                    <p style="color: var(--text-muted); font-size: 0.75rem; margin-top: 5px;">© 2025 AI Quant Terminal. Built for the modern trader.</p>
+                </div>
+            </div>
+        </footer>
+    </div>
+    <script src="/static/js/auth.js?v=4"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const headerActions = document.getElementById('header-actions');
+            if (headerActions) {
+                setTimeout(function() {
+                    if (typeof AuthSystem !== 'undefined' && AuthSystem.isAuthenticated()) {
+                        const user = AuthSystem.getCurrentUser();
+                        headerActions.innerHTML = `
+                            <span style="color: var(--text-secondary); margin-right:15px; font-size:0.9rem;">${user ? user.name : 'Trader'}</span>
+                            <button onclick="AuthSystem.logout()" class="nav-chip" style="border:none; cursor:pointer;">Logout</button>
+                        `;
+                    }
+                }, 100);
+            }
+        });
+    </script>
+</body>
+</html>

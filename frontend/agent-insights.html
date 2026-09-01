@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Agent Intelligence | Quant Terminal</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/pro-theme.css">
+    <link rel="stylesheet" href="/static/css/dynamic-v2.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        .agent-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+        .trace-card { border-left: 3px solid var(--accent, #3b82f6); }
+        .trace-card.ok { border-left-color: #22c55e; }
+        .trace-card.degraded { border-left-color: #f59e0b; }
+        .trace-card.failed { border-left-color: #ef4444; }
+        .trace-card .trace-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .status-chip { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+        .status-chip.ok { background: rgba(34,197,94,.15); color: #22c55e; }
+        .status-chip.degraded { background: rgba(245,158,11,.15); color: #f59e0b; }
+        .status-chip.failed { background: rgba(239,68,68,.15); color: #ef4444; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .bar-track { background: rgba(255,255,255,.08); border-radius: 6px; height: 8px; overflow: hidden; }
+        .bar-fill { height: 100%; border-radius: 6px; transition: width .5s; }
+        .score-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+        .score-row .label { width: 120px; font-size: 12px; opacity: .8; }
+        .score-row .bar-track { flex: 1; }
+        .score-row .val { width: 42px; text-align: right; font-size: 12px; }
+        .citation { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+        .citation a { color: #60a5fa; word-break: break-all; }
+        .citation .src-badge { font-size: 10px; background: rgba(59,130,246,.2); color: #93c5fd; padding: 1px 6px; border-radius: 6px; margin-left: 6px; }
+        .chain-step { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+        .chain-step .step-num { min-width: 26px; height: 26px; border-radius: 50%; background: rgba(59,130,246,.18); color: #60a5fa; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+        .degraded-warn { background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.35); color: #fbbf24; border-radius: 8px; padding: 10px 14px; margin: 10px 0; }
+        .rec-banner { border-radius: 12px; padding: 18px 22px; }
+        .rec-banner .rec-title { font-size: 30px; font-weight: 800; letter-spacing: 1px; }
+        .nav-bar { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
+        .nav-bar a { color: #93c5fd; text-decoration: none; font-size: 13px; background: rgba(255,255,255,.06); padding: 5px 12px; border-radius: 14px; }
+        .nav-bar a:hover { background: rgba(59,130,246,.25); }
+        .kpi { background: rgba(255,255,255,.04); border-radius: 10px; padding: 12px; }
+        .kpi .k-label { font-size: 11px; opacity: .7; }
+        .kpi .k-val { font-size: 20px; font-weight: 700; margin-top: 2px; }
+        .agent-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+        .agent-form label { font-size: 11px; opacity: .75; display: block; margin-bottom: 4px; }
+        .agent-form input, .agent-form select { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); color: #e5e7eb; border-radius: 8px; padding: 8px 12px; font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+        .agent-form input:focus, .agent-form select:focus { outline: none; border-color: #3b82f6; }
+        .btn-primary { background: #3b82f6; color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-weight: 700; cursor: pointer; }
+        .btn-primary:disabled { opacity: .5; cursor: wait; }
+        .btn-ghost { background: rgba(255,255,255,.06); color: #e5e7eb; border: 1px solid rgba(255,255,255,.14); border-radius: 8px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
+        .table-wrap { overflow-x: auto; }
+        table.perf { width: 100%; border-collapse: collapse; font-size: 12px; }
+        table.perf th, table.perf td { text-align: left; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,.07); }
+        table.perf th { color: #9ca3af; font-weight: 600; }
+        .green { color: #22c55e; } .red { color: #ef4444; } .amber { color: #f59e0b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">AI</div>
+                <div class="logo-text">
+                    <h1>Multi-Agent Intelligence</h1>
+                    <p>PS-01 Autonomous Financial Intelligence System</p>
+                </div>
+            </div>
+            <div class="nav-bar">
+                <a href="/">Home</a>
+                <a href="/analysis.html">Analysis</a>
+                <a href="/dashboard.html">Dashboard</a>
+                <a href="/audit-trail.html">Veritas Audit</a>
+                <a href="/auth.html" id="auth-link">Login</a>
+            </div>
+        </header>
+
+        <div class="disclaimer-banner">
+            <span>⚠</span>
+            <span><strong>Disclaimer:</strong> This tool is for educational purposes only. Investments carry market risks. Consult a SEBI-registered advisor.</span>
+        </div>
+
+        <!-- Control panel -->
+        <section class="dashboard-panel box-glow" style="margin-bottom:16px;">
+            <div class="panel-header">
+                <h3>🤖 MULTI-AGENT RESEARCH DESK</h3>
+                <span class="tech-subtext">Parallel agents · RAG grounding · cited reasoning · perf log</span>
+            </div>
+            <div class="agent-form">
+                <div>
+                    <label>SYMBOL</label>
+                    <input type="text" id="symbol" value="RELIANCE.NS" list="symbols" style="width:150px;">
+                </div>
+                <div>
+                    <label>MODE</label>
+                    <select id="mode">
+                        <option value="swing" selected>Swing (1d)</option>
+                        <option value="intraday">Intraday (5m)</option>
+                        <option value="longterm">Long-term (1wk)</option>
+                    </select>
+                </div>
+                <div>
+                    <label>RISK PROFILE (override)</label>
+                    <select id="risk_tolerance">
+                        <option value="" selected>Use my profile</option>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+                <div style="flex:1; min-width:220px;">
+                    <label>QUESTION FOR GROUNDING (optional)</label>
+                    <input type="text" id="query" placeholder="e.g. What do recent filings say about profitability?" style="width:100%;">
+                </div>
+                <button class="btn-primary" id="run-btn" onclick="runAnalysis()">Run Multi-Agent Analysis</button>
+            </div>
+            <datalist id="symbols">
+                <option value="RELIANCE.NS"></option>
+                <option value="TCS.NS"></option>
+                <option value="HDFCBANK.NS"></option>
+                <option value="INFY.NS"></option>
+                <option value="ICICIBANK.NS"></option>
+                <option value="SBIN.NS"></option>
+                <option value="ITC.NS"></option>
+                <option value="LT.NS"></option>
+                <option value="BHARTIARTL.NS"></option>
+            </datalist>
+        </section>
+
+        <!-- Results -->
+        <section id="results" style="display:none;">
+            <!-- Recommendation banner -->
+            <div class="rec-banner box-glow" id="rec-banner" style="margin-bottom:16px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                    <div>
+                        <div style="font-size:12px; opacity:.7;">SYNTHESIZED RECOMMENDATION</div>
+                        <div class="rec-title" id="rec-title">—</div>
+                        <div style="margin-top:6px; opacity:.85;" id="rec-action"></div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div class="kpi" style="background:transparent;">
+                            <div class="k-label">COMPOSITE SCORE</div>
+                            <div class="k-val" id="rec-score">—</div>
+                            <div class="k-label" style="margin-top:6px;">CONFIDENCE</div>
+                            <div class="k-val" id="rec-conf">—</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="degraded-warnings"></div>
+
+            <div class="agent-grid">
+                <!-- Component scores -->
+                <div class="dashboard-panel box-glow">
+                    <div class="panel-header"><h3>COMPONENT SIGNALS</h3></div>
+                    <div id="component-scores"></div>
+                </div>
+
+                <!-- Profile / position sizing -->
+                <div class="dashboard-panel box-glow">
+                    <div class="panel-header"><h3>USER PROFILE &amp; POSITION SIZING</h3></div>
+                    <div id="profile-panel"></div>
+                </div>
+
+                <!-- Performance -->
+                <div class="dashboard-panel box-glow">
+                    <div class="panel-header"><h3>SESSION PERFORMANCE LOG</h3></div>
+                    <div id="perf-panel"></div>
+                </div>
+            </div>
+
+            <!-- Reasoning chain -->
+            <div class="dashboard-panel box-glow" style="margin-top:16px;">
+                <div class="panel-header"><h3>🧠 FULL REASONING CHAIN</h3><span class="tech-subtext">Every step visible &amp; attributable</span></div>
+                <div id="reasoning-chain"></div>
+            </div>
+
+            <!-- Agent traces -->
+            <div class="dashboard-panel box-glow" style="margin-top:16px;">
+                <div class="panel-header"><h3>⚡ AGENT TEAM — PARALLEL EXECUTION</h3><span class="tech-subtext">Structured output contracts</span></div>
+                <div class="agent-grid" id="agent-traces"></div>
+            </div>
+
+            <!-- Citations -->
+            <div class="dashboard-panel box-glow" style="margin-top:16px;">
+                <div class="panel-header"><h3>📚 SOURCE ATTRIBUTION (RAG)</h3><span class="tech-subtext">Retrieved &amp; grounded documents</span></div>
+                <div id="citations"></div>
+            </div>
+        </section>
+
+        <!-- RAG search -->
+        <section class="dashboard-panel box-glow" style="margin-top:16px;">
+            <div class="panel-header"><h3>🔍 SEMANTIC SEARCH — DOCUMENT CORPUS</h3></div>
+            <div class="agent-form">
+                <div style="flex:1; min-width:220px;">
+                    <label>QUERY</label>
+                    <input type="text" id="rag-query" placeholder="e.g. HDFC Bank loan growth and NPA" style="width:100%;" value="quarterly results dividend outlook">
+                </div>
+                <button class="btn-ghost" onclick="ragSearch()">Search</button>
+            </div>
+            <div id="rag-results" style="margin-top:12px;"></div>
+        </section>
+
+        <!-- Performance logs -->
+        <section class="dashboard-panel box-glow" style="margin-top:16px;">
+            <div class="panel-header"><h3>📈 PERFORMANCE LOG &amp; METRICS</h3><span class="tech-subtext">Signal accuracy · latency · risk concentration</span></div>
+            <div id="perf-summary" style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;"></div>
+            <div class="table-wrap">
+                <table class="perf" id="perf-table">
+                    <thead><tr>
+                        <th>Time</th><th>Symbol</th><th>Signal</th><th>Score</th><th>Conf</th>
+                        <th>Total ms</th><th>Risk Conc.</th><th>Degraded</th><th>30d Fwd %</th><th>Accurate</th>
+                    </tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+    const API = '';
+    const $ = (id) => document.getElementById(id);
+
+    function authToken() {
+        return localStorage.getItem('quant_token') || sessionStorage.getItem('quant_token') || '';
+    }
+    function authHeaders() {
+        const t = authToken();
+        return t ? { 'Authorization': 'Bearer ' + t } : {};
+    }
+    function setRecClass(el, rec) {
+        el.classList.remove('strong-buy','buy','hold','reduce','sell');
+        if (rec.includes('STRONG BUY')) el.classList.add('strong-buy');
+        else if (rec.includes('BUY')) el.classList.add('buy');
+        else if (rec.includes('HOLD')) el.classList.add('hold');
+        else if (rec.includes('REDUCE')) el.classList.add('reduce');
+        else el.classList.add('sell');
+    }
+
+    async function runAnalysis() {
+        const btn = $('run-btn');
+        btn.disabled = true; btn.textContent = 'Agents working...';
+        $('results').style.display = 'none';
+        const symbol = $('symbol').value.trim();
+        const mode = $('mode').value;
+        const query = $('query').value.trim();
+        const risk = $('risk_tolerance').value;
+        const params = new URLSearchParams({ symbol, mode });
+        if (query) params.set('query', query);
+        if (risk) params.set('risk_tolerance', risk);
+        try {
+            const resp = await fetch(`${API}/api/v2/agents/analyze?${params}`, { headers: authHeaders() });
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({}));
+                alert('Analysis failed: ' + (err.detail || resp.statusText));
+                return;
+            }
+            const data = await resp.json();
+            renderAnalysis(data);
+        } catch (e) {
+            alert('Request error: ' + e.message);
+        } finally {
+            btn.disabled = false; btn.textContent = 'Run Multi-Agent Analysis';
+        }
+    }
+
+    function renderAnalysis(d) {
+        $('results').style.display = 'block';
+        // Recommendation
+        const title = $('rec-title');
+        title.textContent = d.recommendation;
+        setRecClass(title, d.recommendation);
+        $('rec-action').textContent = d.action;
+        $('rec-score').textContent = d.composite_score + '/100';
+        $('rec-conf').textContent = d.confidence + '%';
+        // Degraded warnings
+        const dw = $('degraded-warnings');
+        dw.innerHTML = '';
+        (d.degraded_data || []).forEach(msg => {
+            const el = document.createElement('div');
+            el.className = 'degraded-warn';
+            el.innerHTML = '<strong>⚠ Degraded data handled:</strong> ' + escapeHtml(msg);
+            dw.appendChild(el);
+        });
+        // Component scores
+        const cs = $('component-scores');
+        cs.innerHTML = '';
+        const comp = d.component_scores || {};
+        const order = ['momentum','volume','sentiment','fundamental','ml','rag','risk_adjusted_composite'];
+        const labels = { momentum:'Momentum', volume:'Volume Anomaly', sentiment:'Sentiment', fundamental:'Fundamental', ml:'ML Probability', rag:'RAG Grounding', risk_adjusted_composite:'Risk-Adjusted Composite' };
+        order.forEach(k => {
+            if (comp[k] === undefined) return;
+            const v = Math.max(0, Math.min(100, comp[k]));
+            const color = v >= 60 ? '#22c55e' : v >= 45 ? '#f59e0b' : '#ef4444';
+            const row = document.createElement('div');
+            row.className = 'score-row';
+            row.innerHTML = `<span class="label">${labels[k]||k}</span>
+                <div class="bar-track"><div class="bar-fill" style="width:${v}%;background:${color}"></div></div>
+                <span class="val">${v}</span>`;
+            cs.appendChild(row);
+        });
+        // Profile & position sizing
+        const pp = $('profile-panel');
+        const prof = d.user_profile_used || {};
+        const pos = d.position_sizing || {};
+        pp.innerHTML = `
+            <div class="kpi"><div class="k-label">RISK TOLERANCE</div><div class="k-val" style="text-transform:capitalize;">${prof.risk_tolerance||'medium'}</div></div>
+            <div class="kpi" style="margin-top:8px;"><div class="k-label">STRATEGY</div><div class="k-val" style="text-transform:capitalize;">${prof.preferred_strategy||'swing'}</div></div>
+            <div class="kpi" style="margin-top:8px;"><div class="k-label">CAPITAL</div><div class="k-val">₹${(prof.capital||0).toLocaleString()}</div></div>
+            <div class="kpi" style="margin-top:8px;"><div class="k-label">RECOMMENDED SHARES</div><div class="k-val">${pos.recommended_shares||0}</div></div>
+            <div class="kpi" style="margin-top:8px;"><div class="k-label">STOP-LOSS</div><div class="k-val">${pos.stop_loss_pct!=null?pos.stop_loss_pct+'%':'—'}</div></div>
+            <div style="margin-top:8px;font-size:11px;opacity:.7;">Profile modifies scores &amp; sizing → different users get different outputs on identical market data.</div>`;
+        // Performance
+        const perf = d.performance || {};
+        const pf = $('perf-panel');
+        pf.innerHTML = `
+            <div class="kpi"><div class="k-label">SESSION ID</div><div class="k-val mono" style="font-size:13px;">${perf.session_id||'—'}</div></div>
+            <div class="kpi" style="margin-top:8px;"><div class="k-label">TOTAL LATENCY</div><div class="k-val">${(perf.total_latency_ms||0).toFixed(0)} ms</div></div>
+            <div class="kpi" style="margin-top:8px;"><div class="k-label">RISK CONCENTRATION</div><div class="k-val">${(perf.risk_concentration_score||0).toFixed(2)}</div></div>
+            <div class="kpi" style="margin-top:8px;"><div class="k-label">DEGRADED AGENTS</div><div class="k-val" style="font-size:13px;">${(perf.degraded_agents||[]).join(', ')||'none'}</div></div>`;
+        // Reasoning chain
+        const rc = $('reasoning-chain');
+        rc.innerHTML = '';
+        (d.reasoning_chain||[]).forEach(s => {
+            const el = document.createElement('div');
+            el.className = 'chain-step';
+            el.innerHTML = `<div class="step-num">${s.step}</div><div><div style="font-weight:700;">${escapeHtml(s.title)}</div><div style="font-size:13px;opacity:.8;">${escapeHtml(s.detail)}</div></div>`;
+            rc.appendChild(el);
+        });
+        // Agent traces
+        const at = $('agent-traces');
+        at.innerHTML = '';
+        (d.agent_traces||[]).forEach(a => {
+            const card = document.createElement('div');
+            card.className = 'trace-card ' + a.status;
+            const facts = (a.key_factors||[]).map(f => `<li style="font-size:12px;opacity:.85;">${escapeHtml(f)}</li>`).join('');
+            const ev = a.evidence || {};
+            card.innerHTML = `
+                <div class="trace-head">
+                    <div><strong>${escapeHtml(a.agent_name)}</strong><div style="font-size:11px;opacity:.65;">${escapeHtml(a.role)}</div></div>
+                    <span class="status-chip ${a.status}">${a.status.toUpperCase()} · ${Math.round(a.latency_ms)}ms</span>
+                </div>
+                <div style="font-size:13px;margin:6px 0;">${escapeHtml(a.summary)}</div>
+                <div style="font-size:12px;"><strong>Confidence:</strong> ${a.confidence.toFixed(0)}% &nbsp; <strong>Score:</strong> ${a.score.toFixed(0)}/100 &nbsp; <strong>View:</strong> ${a.recommendation}</div>
+                ${facts ? `<ul style="margin:6px 0 0;padding-left:18px;">${facts}</ul>` : ''}
+                ${(a.citations||[]).length ? `<div style="margin-top:6px;font-size:11px;color:#60a5fa;">${a.citations.length} source(s) cited</div>` : ''}
+                ${a.error ? `<div style="margin-top:6px;font-size:11px;color:#f59e0b;">${escapeHtml(a.error)}</div>` : ''}`;
+            at.appendChild(card);
+        });
+        // Citations
+        const ct = $('citations');
+        ct.innerHTML = '';
+        const citations = d.citations || [];
+        if (!citations.length) { ct.innerHTML = '<div style="opacity:.6;">No retrieved sources (agent may be degraded).</div>'; }
+        citations.forEach(c => {
+            const el = document.createElement('div');
+            el.className = 'citation';
+            el.innerHTML = `
+                <div style="font-weight:600;">${escapeHtml(c.title)} <span class="src-badge">${escapeHtml(c.source||c.doc_type)}</span></div>
+                <div style="font-size:11px;opacity:.7;margin:3px 0;">${escapeHtml(c.symbol||'')} · ${escapeHtml(c.doc_type)} · relevance ${(c.relevance_score*100).toFixed(0)}%</div>
+                <div style="font-size:12px;opacity:.85;">${escapeHtml((c.snippet||'').slice(0,240))}${c.snippet&&c.snippet.length>240?'…':''}</div>
+                ${c.url ? `<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener">Open source ↗</a>` : '<span style="font-size:11px;opacity:.5;">No direct URL</span>'}`;
+            ct.appendChild(el);
+        });
+        loadPerf();
+    }
+
+    async function ragSearch() {
+        const q = $('rag-query').value.trim();
+        if (!q) return;
+        const out = $('rag-results');
+        out.innerHTML = 'Searching...';
+        try {
+            const params = new URLSearchParams({ query: q });
+            const resp = await fetch(`${API}/api/v2/agents/rag/search?${params}`);
+            const data = await resp.json();
+            out.innerHTML = '';
+            if (!data.results || !data.results.length) { out.innerHTML = '<div style="opacity:.6;">No documents found.</div>'; return; }
+            data.results.forEach(r => {
+                const el = document.createElement('div');
+                el.className = 'citation';
+                el.innerHTML = `
+                    <div style="font-weight:600;">${escapeHtml(r.title)} <span class="src-badge">${escapeHtml(r.source||r.doc_type)}</span></div>
+                    <div style="font-size:11px;opacity:.7;margin:3px 0;">${escapeHtml(r.symbol||'')} · ${escapeHtml(r.doc_type)} · relevance ${(r.relevance_score*100).toFixed(0)}%</div>
+                    <div style="font-size:12px;opacity:.85;">${escapeHtml((r.snippet||'').slice(0,240))}</div>
+                    ${r.url ? `<a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">Open source ↗</a>` : ''}`;
+                out.appendChild(el);
+            });
+        } catch (e) { out.innerHTML = 'Error: ' + escapeHtml(e.message); }
+    }
+
+    async function loadPerf() {
+        try {
+            const resp = await fetch(`${API}/api/v2/agents/performance?limit=15`, { headers: authHeaders() });
+            const data = await resp.json();
+            // summary
+            const s = data.summary || {};
+            const sum = $('perf-summary');
+            sum.innerHTML = `
+                <div class="kpi"><div class="k-label">SESSIONS LOGGED</div><div class="k-val">${s.sessions||0}</div></div>
+                <div class="kpi"><div class="k-label">AVG TOTAL LATENCY</div><div class="k-val">${(s.avg_total_latency_ms||0).toFixed(0)} ms</div></div>
+                <div class="kpi"><div class="k-label">AVG RISK CONCENTRATION</div><div class="k-val">${(s.avg_risk_concentration||0).toFixed(2)}</div></div>
+                <div class="kpi"><div class="k-label">SIGNAL ACCURACY (30d)</div><div class="k-val">${s.accuracy_vs_forward_return!=null ? (s.accuracy_vs_forward_return*100).toFixed(0)+'%' : 'pending eval'}</div></div>
+                <div class="kpi"><div class="k-label">DEGRADED SESSIONS</div><div class="k-val">${s.degraded_sessions||0}</div></div>`;
+            // table
+            const tb = document.querySelector('#perf-table tbody');
+            tb.innerHTML = '';
+            (data.logs||[]).forEach(l => {
+                const tr = document.createElement('tr');
+                const acc = l.signal_accurate === null || l.signal_accurate === undefined ? '—'
+                    : (l.signal_accurate ? '<span class="green">✓</span>' : '<span class="red">✗</span>');
+                const fwd = l.forward_return_pct == null ? '—' : (l.forward_return_pct >= 0 ? '<span class="green">+' + l.forward_return_pct + '%</span>' : '<span class="red">' + l.forward_return_pct + '%</span>');
+                tr.innerHTML = `<td class="mono" style="font-size:11px;">${escapeHtml((l.recorded_at||'').slice(0,19).replace('T',' '))}</td>
+                    <td>${escapeHtml(l.symbol)}</td><td>${escapeHtml(l.signal_type)}</td>
+                    <td>${l.composite_score}</td><td>${l.confidence}</td>
+                    <td class="mono">${Math.round(l.total_latency_ms)}</td>
+                    <td>${(l.risk_concentration_score||0).toFixed(2)}</td>
+                    <td style="font-size:11px;">${escapeHtml((l.degraded_agents||[]).join(', ')||'—')}</td>
+                    <td>${fwd}</td><td>${acc}</td>`;
+                tb.appendChild(tr);
+            });
+        } catch (e) { /* ignore */ }
+    }
+
+    function escapeHtml(str) {
+        return String(str == null ? '' : str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    }
+
+    // Auth-aware nav + initial perf load
+    (function init() {
+        const t = authToken();
+        if (t) { $('auth-link').textContent = 'Dashboard'; $('auth-link').href = '/dashboard.html'; }
+        loadPerf();
+    })();
+    </script>
+</body>
+</html>

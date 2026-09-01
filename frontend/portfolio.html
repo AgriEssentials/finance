@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Portfolio Manager | Quant Terminal</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/pro-theme.css">
+    <link rel="stylesheet" href="/static/css/dynamic-v2.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        .portfolio-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+        @media (max-width: 1024px) {
+            .portfolio-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-box {
+            background: rgba(255,255,255,0.03);
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .stat-label {
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            margin-top: 5px;
+            font-family: var(--font-mono);
+        }
+        .trade-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .stock-info {
+            display: flex;
+            gap: 15px;
+            padding: 12px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .stock-price {
+            font-weight: 600;
+            color: var(--info);
+        }
+        .btn-sell {
+            background: linear-gradient(135deg, var(--danger), #c44569) !important;
+            color: #fff !important;
+            padding: 12px 24px;
+            border-radius: var(--radius-sm);
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .btn-sell:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(255, 71, 87, 0.3);
+        }
+        .positions-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        .recommendation-item {
+            padding: 16px;
+            background: var(--bg-card);
+            border-radius: var(--radius);
+            margin-bottom: 12px;
+            border-left: 4px solid var(--info);
+        }
+        .recommendation-item.alert {
+            border-left-color: var(--danger);
+        }
+        .recommendation-item.profit {
+            border-left-color: var(--success);
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: var(--info);
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .sector-chart {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .sector-item {
+            padding: 8px 12px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+            font-size: 13px;
+        }
+        .sector-percentage {
+            color: var(--info);
+            font-weight: 600;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: rgba(255,255,255,0.5);
+        }
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        /* Auth check: Hide content until verified */
+        #auth-checking { 
+            position: fixed; 
+            top: 0; left: 0; right: 0; bottom: 0; 
+            background: var(--bg-primary); 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            z-index: 9999;
+        }
+        #auth-checking .loading-text {
+            color: var(--info);
+            font-size: 18px;
+        }
+        #main-content { 
+            display: none; 
+        }
+        #main-content.authenticated { 
+            display: block; 
+        }
+    </style>
+</head>
+<body>
+    <div id="auth-checking">
+        <div class="loading-text">Verifying authentication...</div>
+    </div>
+    
+    <div id="main-content" class="container">
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">AI</div>
+                <div class="logo-text">
+                    <h1>AI Quant Terminal</h1>
+                    <p>Professional Market Intelligence</p>
+                </div>
+            </div>
+            <nav class="main-nav">
+                <a href="/">Home</a>
+                <a href="/dashboard.html">Dashboard</a>
+                <a href="/analysis.html">Analysis</a>
+                <a href="/portfolio.html" class="active">Portfolio</a>
+                <a href="/audit-trail.html">Veritas</a>
+            </nav>
+            <div class="header-actions">
+                <a href="#" class="nav-chip" onclick="AuthSystem.logout(); return false;">Logout</a>
+            </div>
+        </header>
+        
+        <div class="portfolio-grid">
+            <!-- Portfolio Overview -->
+            <div class="card box-glow">
+                <h3>
+                    💰 Portfolio Overview
+                    <button class="btn-secondary" style="float: right; padding: 6px 12px; font-size: 0.8rem;" onclick="loadPortfolio()">🔄 Refresh</button>
+                </h3>
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="stat-label">Total Value</div>
+                        <div class="stat-value" id="total-value">₹0</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-label">Cash Available</div>
+                        <div class="stat-value" id="cash-value">₹0</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-label">Unrealized P&L</div>
+                        <div class="stat-value" id="pnl-value">₹0</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-label">Day Change</div>
+                        <div class="stat-value" id="day-change">₹0</div>
+                    </div>
+                </div>
+                
+                <h3 style="font-size: 14px; margin: 20px 0 15px; color: var(--text-secondary);">Sector Allocation</h3>
+                <div class="sector-chart" id="sector-allocation">
+                    <div class="loading"></div>
+                </div>
+            </div>
+            
+            <!-- Buy/Sell Form -->
+            <div class="card box-glow">
+                <h3>🛒 Trade Stocks</h3>
+                <div class="trade-form panel-content">
+                    <div class="form-group">
+                        <label>Select Stock</label>
+                        <select id="stock-select" onchange="onStockSelect()" style="width: 100%;">
+                            <option value="">Choose a stock...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="stock-info" id="stock-info" style="display: none;">
+                        <div>
+                            <span>Current Price: </span>
+                            <span class="stock-price" id="current-price">-</span>
+                        </div>
+                        <div>
+                            <span>Day Change: </span>
+                            <span id="day-change-stock">-</span>
+                        </div>
+                        <div>
+                            <span>Sector: </span>
+                            <span id="stock-sector">-</span>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Quantity (Shares)</label>
+                        <input type="number" id="shares-input" min="1" value="1" placeholder="Enter quantity">
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+                        <button class="btn-primary" onclick="executeTrade('BUY')">
+                            Buy Shares
+                        </button>
+                        <button class="btn-sell" onclick="executeTrade('SELL')">
+                            Sell Shares
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Positions -->
+            <div class="card box-glow" style="grid-column: 1 / -1;">
+                <h3>📈 Your Positions</h3>
+                <div class="panel-content" id="positions-container">
+                    <div class="loading"></div>
+                </div>
+            </div>
+            
+            <!-- AI Recommendations -->
+            <div class="card box-glow" style="grid-column: 1 / -1;">
+                <h3>🤖 AI Recommendations</h3>
+                <div class="panel-content recommendations" id="recommendations">
+                    <div class="loading"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/static/js/auth.js?v=4"></script>
+    <script>
+        // Check authentication AND setup status after DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Small delay to ensure AuthSystem is fully initialized
+            setTimeout(async function() {
+                if (!AuthSystem.isAuthenticated()) {
+                    window.location.href = '/auth.html';
+                    return;
+                }
+                
+                // Check if user has completed portfolio setup
+                try {
+                    const token = localStorage.getItem('access_token');
+                    const response = await fetch('/api/portfolio/setup', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        // Only show portfolio if setup is complete
+                        if (data.setup_complete === true) {
+                            document.getElementById('auth-checking').style.display = 'none';
+                            document.getElementById('main-content').classList.add('authenticated');
+                        } else {
+                            // Redirect to setup if not complete
+                            window.location.href = '/setup.html';
+                            return;
+                        }
+                    } else {
+                        // API error, assume new user needs setup
+                        window.location.href = '/setup.html';
+                        return;
+                    }
+                } catch (error) {
+                    console.error('Setup check error:', error);
+                    // On error, redirect to setup
+                    window.location.href = '/setup.html';
+                    return;
+                }
+            }, 100);
+        });
+        
+        let availableStocks = [];
+        let portfolioData = null;
+        
+        // Load stock list
+        async function loadStocks() {
+            try {
+                const response = await AuthSystem.authenticatedFetch('/api/portfolio/stocks');
+                if (!response.ok) throw new Error('Failed to load stocks');
+                
+                const data = await response.json();
+                availableStocks = data.stocks;
+                
+                const select = document.getElementById('stock-select');
+                select.innerHTML = '<option value="">Choose a stock...</option>';
+                
+                data.stocks.forEach(stock => {
+                    const option = document.createElement('option');
+                    option.value = stock.symbol;
+                    option.textContent = `${stock.name} (${stock.symbol.replace('.NS', '')}) - ₹${stock.current_price || 'N/A'}`;
+                    option.dataset.price = stock.current_price || '';
+                    option.dataset.change = stock.day_change_percent || '';
+                    option.dataset.sector = stock.sector || '';
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading stocks:', error);
+            }
+        }
+        
+        // On stock selection
+        function onStockSelect() {
+            const select = document.getElementById('stock-select');
+            const selectedOption = select.options[select.selectedIndex];
+            const infoDiv = document.getElementById('stock-info');
+            
+            if (!select.value) {
+                infoDiv.style.display = 'none';
+                return;
+            }
+            
+            const price = selectedOption.dataset.price;
+            const change = selectedOption.dataset.change;
+            const sector = selectedOption.dataset.sector;
+            
+            document.getElementById('current-price').textContent = price ? `₹${price}` : 'N/A';
+            document.getElementById('day-change-stock').textContent = change ? `${change}%` : 'N/A';
+            document.getElementById('day-change-stock').className = change > 0 ? 'metric-value positive' : (change < 0 ? 'metric-value negative' : 'metric-value');
+            document.getElementById('stock-sector').textContent = sector || 'N/A';
+            
+            infoDiv.style.display = 'flex';
+        }
+        
+        // Execute trade
+        async function executeTrade(action) {
+            const symbol = document.getElementById('stock-select').value;
+            const shares = parseInt(document.getElementById('shares-input').value);
+            
+            if (!symbol) {
+                AuthSystem.showToast('Please select a stock', 'error');
+                return;
+            }
+            
+            if (!shares || shares < 1) {
+                AuthSystem.showToast('Please enter valid quantity', 'error');
+                return;
+            }
+            
+            try {
+                const endpoint = action === 'BUY' ? '/api/portfolio/buy' : '/api/portfolio/sell';
+                const selectedOption = document.getElementById('stock-select').options[document.getElementById('stock-select').selectedIndex];
+                const sector = selectedOption.dataset.sector;
+                
+                const params = new URLSearchParams({
+                    symbol: symbol,
+                    shares: shares.toString()
+                });
+                
+                if (action === 'BUY' && sector) {
+                    params.append('sector', sector);
+                }
+                
+                const response = await AuthSystem.authenticatedFetch(
+                    `${endpoint}?${params.toString()}`,
+                    { method: 'POST' }
+                );
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    AuthSystem.showToast(`${action} order executed successfully!`, 'success');
+                    // Signal to homepage that portfolio has changed
+                    localStorage.setItem('portfolio_last_updated', Date.now().toString());
+                    localStorage.setItem('portfolio_needs_refresh', 'true');
+                    loadPortfolio(); // Refresh portfolio
+                } else {
+                    AuthSystem.showToast(result.error || 'Trade failed', 'error');
+                }
+            } catch (error) {
+                console.error('Trade error:', error);
+                AuthSystem.showToast('Trade failed: ' + error.message, 'error');
+            }
+        }
+        
+        // Load portfolio data
+        async function loadPortfolio() {
+            try {
+                const response = await AuthSystem.authenticatedFetch('/api/portfolio/summary');
+                if (!response.ok) throw new Error('Failed to load portfolio');
+                
+                const data = await response.json();
+                portfolioData = data.portfolio;
+                
+                // Check if portfolio is set up
+                if (!portfolioData.is_setup) {
+                    // Show setup required message
+                    document.getElementById('total-value').textContent = 'Not Set Up';
+                    document.getElementById('cash-value').textContent = 'Not Set Up';
+                    document.getElementById('pnl-value').textContent = '-';
+                    document.getElementById('day-change').textContent = '-';
+                    
+                    document.getElementById('sector-allocation').innerHTML = `
+                        <div style="text-align: center; padding: 20px; width: 100%;">
+                            <p style="color: var(--text-muted); margin-bottom: 15px;">You haven't set up your portfolio yet.</p>
+                            <a href="/setup.html" class="btn-primary" style="display: inline-block;">Set Up Portfolio →</a>
+                        </div>
+                    `;
+                    
+                    document.getElementById('positions-container').innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📝</div>
+                            <p>Please set up your portfolio first to start tracking.</p>
+                            <a href="/setup.html" class="btn-primary" style="display: inline-block; margin-top: 15px;">Set Up Portfolio →</a>
+                        </div>
+                    `;
+                    
+                    document.getElementById('recommendations').innerHTML = `
+                        <p style="color: var(--text-muted); text-align: center;">Complete your portfolio setup to get AI recommendations.</p>
+                    `;
+                    
+                    return;
+                }
+                
+                // Update stats
+                document.getElementById('total-value').textContent = `₹${(portfolioData.total_value || 0).toLocaleString('en-IN')}`;
+                document.getElementById('cash-value').textContent = `₹${(portfolioData.cash || 0).toLocaleString('en-IN')}`;
+                
+                const pnlEl = document.getElementById('pnl-value');
+                pnlEl.textContent = `₹${(portfolioData.unrealized_pnl || 0).toLocaleString('en-IN')} (${portfolioData.unrealized_pnl_percent || 0}%)`;
+                pnlEl.className = 'stat-value ' + (portfolioData.unrealized_pnl >= 0 ? 'metric-value positive' : 'metric-value negative');
+                
+                const dayChangeEl = document.getElementById('day-change');
+                dayChangeEl.textContent = `₹${(portfolioData.day_change || 0).toLocaleString('en-IN')} (${portfolioData.day_change_percent || 0}%)`;
+                dayChangeEl.className = 'stat-value ' + (portfolioData.day_change >= 0 ? 'metric-value positive' : 'metric-value negative');
+                
+                // Update sector allocation
+                const sectorDiv = document.getElementById('sector-allocation');
+                if (portfolioData.sector_allocation && Object.keys(portfolioData.sector_allocation).length > 0) {
+                    sectorDiv.innerHTML = Object.entries(portfolioData.sector_allocation)
+                        .map(([sector, pct]) => `
+                            <div class="sector-item">
+                                ${sector} <span class="sector-percentage">${pct}%</span>
+                            </div>
+                        `).join('');
+                } else {
+                    sectorDiv.innerHTML = '<div style="color: var(--text-muted);">No positions yet</div>';
+                }
+                
+                // Update positions table
+                updatePositionsTable(portfolioData.positions || []);
+                
+                // Load AI recommendations
+                loadRecommendations(data.ai_recommendations || []);
+                
+            } catch (error) {
+                console.error('Error loading portfolio:', error);
+                AuthSystem.showToast('Failed to load portfolio', 'error');
+            }
+        }
+        
+        // Update positions table
+        function updatePositionsTable(positions) {
+            const container = document.getElementById('positions-container');
+            
+            if (positions.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📭</div>
+                        <p>No positions yet. Start trading to build your portfolio!</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = `
+                <table class="positions-table">
+                    <thead>
+                        <tr>
+                            <th>Stock</th>
+                            <th>Shares</th>
+                            <th>Avg Cost</th>
+                            <th>Current Price</th>
+                            <th>Market Value</th>
+                            <th>Unrealized P&L</th>
+                            <th>Weight</th>
+                            <th>Sector</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${positions.map(pos => `
+                            <tr>
+                                <td><strong>${pos.symbol.replace('.NS', '')}</strong></td>
+                                <td>${pos.shares}</td>
+                                <td>₹${pos.avg_cost}</td>
+                                <td>₹${pos.current_price}</td>
+                                <td>₹${(pos.market_value || 0).toLocaleString('en-IN')}</td>
+                                <td class="${pos.unrealized_pnl >= 0 ? 'metric-value positive' : 'metric-value negative'}">
+                                    ₹${(pos.unrealized_pnl || 0).toLocaleString('en-IN')} (${pos.unrealized_pnl_percent || 0}%)
+                                </td>
+                                <td>${pos.weight}%</td>
+                                <td>${pos.sector || '-'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+        
+        // Load AI recommendations
+        function loadRecommendations(recommendations) {
+            const container = document.getElementById('recommendations');
+            
+            if (recommendations.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted);">No recommendations at this time. Your portfolio looks good!</p>';
+                return;
+            }
+            
+            container.innerHTML = recommendations.map(rec => `
+                <div class="recommendation-item ${rec.action === 'STOP_LOSS_ALERT' ? 'alert' : rec.action === 'CONSIDER_TAKING_PROFITS' ? 'profit' : ''}">
+                    <strong>${rec.symbol.replace('.NS', '')}</strong> - ${rec.action.replace(/_/g, ' ')}
+                    <p style="margin: 5px 0 0; font-size: 13px; color: var(--text-secondary);">${rec.reason}</p>
+                    <div style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">
+                        Current: ₹${rec.current_price} | Unrealized: ${rec.unrealized_pnl_percent.toFixed(1)}% | Day: ${rec.day_change_percent > 0 ? '+' : ''}${rec.day_change_percent.toFixed(1)}%
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // Auto-refresh every 30 seconds
+        setInterval(() => {
+            if (AuthSystem.isAuthenticated()) {
+                loadPortfolio();
+                loadStocks();
+            }
+        }, 30000);
+        
+        // Initial load
+        loadStocks();
+        loadPortfolio();
+    </script>
+</body>
+</html>
+        loadPortfolio();
+    </script>
+</body>
+</html>

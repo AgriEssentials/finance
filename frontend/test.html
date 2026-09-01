@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head><title>API Test</title></head>
+<body>
+<h1>API Test</h1>
+<button onclick="testAPI()">Test Professional API</button>
+<pre id="result"></pre>
+<script>
+async function testAPI() {
+    try {
+        const response = await fetch('http://localhost:8000/api/professional/analyze?symbol=RELIANCE.NS&mode=swing&portfolio_value=1000000');
+        if (!response.ok) {
+            const error = await response.text();
+            document.getElementById('result').textContent = 'HTTP Error: ' + response.status + '\n' + error;
+            return;
+        }
+        const data = await response.json();
+        document.getElementById('result').textContent = JSON.stringify(data.professional_recommendation || data, null, 2);
+    } catch (e) {
+        document.getElementById('result').textContent = 'Error: ' + e.message;
+    }
+}
+</script>
+</body>
+</html>

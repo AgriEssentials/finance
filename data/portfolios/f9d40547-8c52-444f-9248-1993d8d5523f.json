@@ -1,0 +1,115 @@
+{
+  "cash": 5167.5,
+  "initial_capital": 65875.0,
+  "is_setup": true,
+  "positions": [
+    {
+      "symbol": "RELIANCE",
+      "shares": 2,
+      "avg_cost": 123.0,
+      "current_price": 123.0,
+      "current_value": 0.0,
+      "unrealized_pnl": 0.0,
+      "unrealized_pnl_percent": 0.0,
+      "sector": null,
+      "last_updated": ""
+    },
+    {
+      "symbol": "INFY.NS",
+      "shares": 28,
+      "avg_cost": 651.3035714285714,
+      "current_price": 1153.9000244140625,
+      "current_value": 32309.20068359375,
+      "unrealized_pnl": 14072.70068359375,
+      "unrealized_pnl_percent": 77.16777168641872,
+      "sector": "Technology",
+      "last_updated": "2026-09-01T13:32:06.302851"
+    },
+    {
+      "symbol": "ICICIBANK.NS",
+      "shares": 1,
+      "avg_cost": 1350.0,
+      "current_price": 1432.199951171875,
+      "current_value": 1432.199951171875,
+      "unrealized_pnl": 82.199951171875,
+      "unrealized_pnl_percent": 6.0888852719907405,
+      "sector": "Financial",
+      "last_updated": "2026-09-01T13:32:06.403116"
+    }
+  ],
+  "transactions": [
+    {
+      "symbol": "RELIANCE",
+      "action": "buy",
+      "shares": 2,
+      "price": 123.0,
+      "date": "2026-04-23T08:25:47.480316",
+      "fees": 0.0,
+      "total_amount": 246.0
+    },
+    {
+      "symbol": "INFY.NS",
+      "action": "buy",
+      "shares": 23,
+      "price": 543.0,
+      "date": "2026-04-23T08:25:47.483813",
+      "fees": 0.0,
+      "total_amount": 12489.0
+    },
+    {
+      "symbol": "ICICIBANK.NS",
+      "action": "buy",
+      "shares": 1,
+      "price": 1350.0,
+      "date": "2026-04-23T08:35:15.303123",
+      "fees": 0.0,
+      "total_amount": 1350.0
+    },
+    {
+      "symbol": "INFY.NS",
+      "action": "buy",
+      "shares": 1,
+      "price": 1149.5,
+      "date": "2026-09-01T07:08:12.808277",
+      "fees": 0.0,
+      "total_amount": 1149.5
+    },
+    {
+      "symbol": "INFY.NS",
+      "action": "buy",
+      "shares": 1,
+      "price": 1149.5,
+      "date": "2026-09-01T07:08:13.326775",
+      "fees": 0.0,
+      "total_amount": 1149.5
+    },
+    {
+      "symbol": "INFY.NS",
+      "action": "buy",
+      "shares": 1,
+      "price": 1149.5,
+      "date": "2026-09-01T07:08:13.791992",
+      "fees": 0.0,
+      "total_amount": 1149.5
+    },
+    {
+      "symbol": "INFY.NS",
+      "action": "buy",
+      "shares": 1,
+      "price": 1149.5,
+      "date": "2026-09-01T07:08:14.152936",
+      "fees": 0.0,
+      "total_amount": 1149.5
+    },
+    {
+      "symbol": "INFY.NS",
+      "action": "buy",
+      "shares": 1,
+      "price": 1149.5,
+      "date": "2026-09-01T07:08:14.558560",
+      "fees": 0.0,
+      "total_amount": 1149.5
+    }
+  ],
+  "last_saved": "2026-09-01T13:32:06.439420"
+}
