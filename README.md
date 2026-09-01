@@ -1,588 +1,412 @@
-# Quant Terminal - AI Stock Analysis Assistant
+<div align="center">
 
-[![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.104%2B-green)](https://fastapi.tiangolo.com)
+# 🧠 AI Quant Terminal
+
+### Your Personal AI Stock-Research Assistant for Indian Markets (NSE / BSE)
+
+**Turn raw market data into clear, personalized, explainable investment intelligence — in seconds.**
+
+&nbsp;
+
+[![Python](https://img.shields.io/badge/Python-3.8%2B-blue?logo=python&logoColor=white)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104%2B-green?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)]()
+[![Multi-Agent](https://img.shields.io/badge/PS--01-Multi--Agent%20AI-purple)](AGENT_ARCHITECTURE.md)
 
-> **Professional-grade AI-powered stock analysis platform for Indian markets (NSE/BSE) with real-time market data, personalized portfolio tracking, and intelligent trading signals.**
+*Educational tool — not financial advice. Always consult a SEBI-registered advisor.*
 
----
-
-## 📋 Table of Contents
-
-- [Overview](#overview)
-- [Key Features](#key-features)
-- [Technology Stack](#technology-stack)
-- [System Architecture](#system-architecture)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [API Documentation](#api-documentation)
-- [Project Structure](#project-structure)
-- [Database Schema](#database-schema)
-- [Screenshots](#screenshots)
-- [Contributing](#contributing)
-- [License](#license)
+</div>
 
 ---
 
-## 🎯 Overview
+## 🎯 What Is This?
 
-Quant Terminal is a comprehensive web-based stock analysis platform designed for Indian equity markets. It combines real-time market data, advanced technical indicators, machine learning predictions, and news sentiment analysis to provide actionable trading insights.
+**AI Quant Terminal** is a single web app that does professional-grade stock research automatically. Instead of juggling dozens of websites, you open one page, type a stock symbol, and the app:
 
-### Target Users
-- **Retail Traders** - Swing trading and intraday analysis
-- **Long-term Investors** - Fundamental analysis and portfolio tracking
-- **Market Analysts** - Real-time market monitoring and research
+1. Pulls the latest prices and historical data.
+2. Runs technical analysis (RSI, MACD, momentum, volume, support/resistance…).
+3. Checks the fundamentals (valuation, financial health).
+4. Reads the news **and** measures the mood (positive / negative sentiment).
+5. Asks machine-learning models to predict the direction.
+6. Weighs the risk and tells you a **stop-loss**.
+7. Combines everything and uses an **AI "brain"** (a large language model) to give one clear answer: **BUY / HOLD / SELL**, with a confidence level and the *reasoning behind it*.
 
-### Market Coverage
-- **NSE (National Stock Exchange)** - All listed equities and indices
-- **BSE (Bombay Stock Exchange)** - Primary indices and securities
-- **Major Indices** - NIFTY 50, SENSEX, BANKNIFTY, INDIA VIX
+Then — when you log in — it personalizes that answer to **your** risk tolerance and portfolio, grounds it in **cited sources** (filings, announcements, news), shows the **full reasoning chain**, and logs every session's **performance** for you.
+
+> **Why it's different:** most stock tools show you *charts*. This one does the *analysis and explains its thinking*, so you understand *why* — not just *what*.
 
 ---
 
-## ⭐ Key Features
+## ✨ Key Features
 
-### 🔮 AI-Powered Analysis
-- **Machine Learning Predictions** - SVM-based classification for buy/sell signals
-- **Sentiment Analysis** - Real-time news sentiment using transformer models (DistilBERT)
-- **Risk Assessment** - Dynamic position sizing based on volatility (ATR)
-- **Personalized Recommendations** - Tailored to user's risk tolerance and portfolio
+### 🤖 AI-Powered Analysis
+- **Multi-Agent AI system** (`/api/v2/agents/analyze`) — a team of 7 specialized agents work **in parallel** and a synthesis layer combines them.
+- **Machine-learning predictions** for price direction (up/down probability).
+- **AI recommendation** powered by a large language model (Groq) with fallbacks so it never crashes.
+- **Explainable** — every recommendation shows the reasoning steps, key factors, and cited sources.
 
-### 📊 Technical Analysis
-- **Multi-Timeframe Support** - Intraday (5m), Swing (1d), Long-term (1wk)
-- **Comprehensive Indicators**:
-  - RSI (Relative Strength Index) with overbought/oversold signals
-  - MACD with histogram and divergence detection
-  - ATR (Average True Range) for volatility measurement
-  - EMA (9, 21, 50 periods) for trend analysis
-  - Volume analysis and OBV
-  - Stochastic Oscillator
-  - Bollinger Bands
-
-### 📈 Real-Time Market Data
-- **Live Price Feeds** - Real-time stock prices via Yahoo Finance
-- **Market Indices** - NIFTY, SENSEX, BANKNIFTY with live updates
-- **Sector Heatmaps** - Visual representation of sector performance
-- **Sparkline Charts** - Mini price charts for quick trend visualization
-
-### 💼 Portfolio Management
-- **Multi-Stock Portfolios** - Track unlimited positions
-- **Real-time P&L** - Unrealized gains/losses with current market prices
-- **Sector Allocation** - Visual breakdown by industry sector
-- **Transaction History** - Complete buy/sell history with timestamps
-- **Cash Management** - Track available cash and total portfolio value
-- **Per-User Isolation** - Each user's data is completely separate and secure
-
-### 🔐 Authentication & Security
-- **JWT-based Authentication** - Secure token-based login system
-- **Supabase Integration** - PostgreSQL backend with Row Level Security
-- **Session Management** - 30-minute session expiry with auto-refresh
-- **Rate Limiting** - API endpoint protection against abuse
+### 📊 Technical & Fundamental Analysis
+- **RSI, MACD, ATR, EMA, Bollinger Bands, Stochastic** — a full indicator suite.
+- **Multi-timeframe**: Intraday (5-min) · Swing (daily) · Long-term (weekly).
+- **Volume anomaly detection** and price-volume confirmation.
+- **Financial health**, valuation, profit margins, sector comparison.
 
 ### 📰 News & Sentiment
-- **Multi-Source News Aggregation** - GNews, Finnhub, NewsData.io APIs
-- **Real-time Sentiment Scoring** - -1 to +1 sentiment scale
-- **Impact Analysis** - Article ranking by recency, source authority, and relevance
-- **Caching System** - 10-minute sentiment cache to reduce API costs
+- Aggregates news from **multiple sources** (GNews, NewsData.io, Finnhub, Firecrawl).
+- **Sentiment score** (-1 to +1) with per-article reasoning.
+- **Source attribution** — each news item links back to where it came from.
 
-### 🎨 User Interface
-- **Modern Dark Theme** - Professional trading terminal aesthetic
-- **Responsive Design** - Works on desktop, tablet, and mobile
-- **Interactive Charts** - Chart.js integration with custom styling
-- **Real-time Updates** - Auto-refreshing dashboard every 30 seconds
-- **Toast Notifications** - Success/error feedback for all actions
+### 💼 Portfolio & Watchlist Management
+- Track unlimited holdings with **live P&L**, sector allocation, and positions.
+- **AI recommendations** personalized to your risk profile and capital.
+- Watchlists, alerts, and a **trade journal** with behavioral insights.
 
----
+### 🔐 Authentication & Security
+- **Supabase Auth** (email/password) with JWT tokens and 30-min session refresh.
+- User data isolated with **Row-Level Security** where configured.
+- Local **SQLite** fallback so the app still runs without Supabase.
 
-## 🛠 Technology Stack
-
-### Backend
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| Web Framework | FastAPI (Python) | High-performance async API server |
-| Data Provider | yfinance | Real-time and historical stock data |
-| ML/AI | scikit-learn, transformers | Predictions and sentiment analysis |
-| Database | Supabase (PostgreSQL) | User data, profiles, and persistence |
-| Cache | Redis + In-Memory | Multi-layer caching for performance |
-| Auth | JWT + Supabase Auth | Secure user authentication |
-| Async | asyncio, aiohttp | Non-blocking I/O operations |
-
-### Frontend
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| Structure | HTML5 | Semantic markup |
-| Styling | CSS3 + Custom Properties | Theming and responsive layout |
-| Scripting | Vanilla JavaScript (ES6+) | No framework dependency |
-| Charts | Chart.js | Interactive data visualization |
-| Icons | Font Awesome | UI iconography |
-| Fonts | Google Fonts (Outfit, JetBrains Mono) | Typography |
-
-### External APIs
-| Service | Purpose | Rate Limits |
-|---------|---------|-------------|
-| Yahoo Finance | Stock prices and historical data | 2000 requests/hour |
-| GNews API | News headlines and articles | 100 requests/day (free) |
-| Finnhub API | Company news and fundamentals | 60 requests/minute |
-| NewsData.io | Alternative news source | 200 requests/day (free) |
-| Groq | AI analysis & predictions (Llama models) | Depends on plan |
-| Firecrawl | Stock-specific news search & scraping | Depends on plan |
+### 📈 Performance & Audit
+- **Session performance log** — signal accuracy vs. 30-day forward return, agent response latency, portfolio risk-concentration score.
+- **Veritas audit trail** — every AI signal is logged with evidence and a verification hash.
 
 ---
 
-## 🏗 System Architecture
+## 🧩 The Multi-Agent System (PS-01)
+
+The standout feature is an **orchestrated team of specialized AI agents** that research a stock together, then a "synthesis layer" writes one final recommendation.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         CLIENT LAYER                            │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │   Browser    │  │   Mobile     │  │   Tablet     │          │
-│  │  (index.html)│  │ (Responsive) │  │  (Responsive) │          │
-│  └──────────────┘  └──────────────┘  └──────────────┘          │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼ HTTPS
-┌─────────────────────────────────────────────────────────────────┐
-│                      API GATEWAY LAYER                          │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │                    FastAPI Server                         │  │
-│  │  ┌────────────┐ ┌────────────┐ ┌──────────────────────┐  │  │
-│  │  │   CORS     │ │ Rate Limit │ │    JWT Auth          │  │  │
-│  │  │  Middleware│ │ Middleware │ │   Middleware         │  │  │
-│  │  └────────────┘ └────────────┘ └──────────────────────┘  │  │
-│  └──────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┼───────────────┐
-              ▼               ▼               ▼
-┌─────────────────┐  ┌──────────────┐  ┌──────────────┐
-│   SERVICE LAYER │  │   CACHE      │  │   EXTERNAL   │
-│ ┌─────────────┐ │  │   LAYER      │  │   APIs       │
-│ │ Portfolio   │ │  │ ┌──────────┐ │  │ ┌──────────┐ │
-│ │   Manager   │ │  │ │  Redis   │ │  │ │ Yahoo    │ │
-│ └─────────────┘ │  │ │  Cache   │ │  │ │ Finance  │ │
-│ ┌─────────────┐ │  │ └──────────┘ │  │ └──────────┘ │
-│ │  Sentiment  │ │  │ ┌──────────┐ │  │ ┌──────────┐ │
-│ │  Analyzer   │ │  │ │ In-Memory│ │  │ │  GNews   │ │
-│ └─────────────┘ │  │ │  Cache   │ │  │ └──────────┘ │
-│ ┌─────────────┐ │  │ └──────────┘ │  │ ┌──────────┐ │
-│ │  Technical  │ │  └──────────────┘  │ │ Finnhub  │ │
-│ │ Indicators  │ │                    │ └──────────┘ │
-│ └─────────────┘ │                    │ ┌──────────┐ │
-│ ┌─────────────┐ │                    │ │NewsData  │ │
-│ │   ML Models │ │                    │ └──────────┘ │
-│ │  (SVM, etc) │ │                    └──────────────┘
-│ └─────────────┘ │
-└─────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      DATA PERSISTENCE LAYER                     │
-│  ┌──────────────────────────────────────────────────────────┐    │
-│  │                  Supabase (PostgreSQL)                  │    │
-│  │  ┌────────────┐  ┌────────────┐  ┌────────────┐       │    │
-│  │  │  profiles  │  │ portfolios │  │ watchlists │       │    │
-│  │  └────────────┘  └────────────┘  └────────────┘       │    │
-│  └──────────────────────────────────────────────────────────┘    │
-│  ┌──────────────────────────────────────────────────────────┐    │
-│  │                  Local File Storage                      │    │
-│  │              (data/portfolios/{user_id}.json)           │    │
-│  └──────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────┘
+  Market data + document corpus (filings, announcements, news)
+                        │
+                        ▼
+        ┌── MULTI-AGENT ORCHESTRATOR ──────────────┐
+        │  Run all agents IN PARALLEL:             │
+        │   • Price Momentum Agent                 │
+        │   • Volume Anomaly Agent                 │
+        │   • News Sentiment Agent                 │
+        │   • Fundamental Agent                    │
+        │   • Machine-Learning Agent               │
+        │   • Risk-Manager Agent                   │
+        │   • News Grounding Agent (RAG)           │
+        └──────────────────────────────────────────┘
+                        │
+                        ▼
+        SYNTHESIS LAYER (weighted composite)
+        • adjusts for YOUR risk profile
+        • builds the reasoning chain + citations
+        • logs performance + writes the audit trail
+                        │
+                        ▼
+   One clear answer: BUY / HOLD / SELL + confidence + sources
 ```
+
+### The 7 Agents
+
+| Agent | What it studies | Output |
+|-------|-----------------|--------|
+| **Momentum** | RSI, MACD, trend | Buy/Hold/Sell + score |
+| **Volume Anomaly** | Volume spikes & price-volume confirmation | Buy/Hold/Sell + score |
+| **Sentiment** | News mood + article attribution | Buy/Hold/Sell + score |
+| **Fundamental** | Financial health & valuation | Buy/Hold/Sell + score |
+| **ML Predictor** | Classifier probability of an up-move | Buy/Hold/Sell + score |
+| **Risk Manager** | Stop-loss, volatility, concentration | Risk level + position size |
+| **News Grounding (RAG)** | Retrieves relevant filings/announcements | Grounded view + citations |
+
+Try it: open `/agent-insights.html`, type a symbol, and hit **Run Multi-Agent Analysis**.
+
+> 📄 Read the full design in [`AGENT_ARCHITECTURE.md`](AGENT_ARCHITECTURE.md).
 
 ---
 
-## 💻 Installation
+## 🛠 Tech Stack
 
-### Prerequisites
-- Python 3.8 or higher
-- Node.js 14+ (optional, for frontend development)
-- Redis (optional, for caching)
-- Git
+| Layer | Technology | Why |
+|-------|-----------|-----|
+| Backend | **FastAPI (Python)** | Fast, async, auto-generated docs |
+| Market data | **yfinance** | Live/historical prices for NSE/BSE |
+| ML / AI | **scikit-learn**, **HuggingFace Transformers**, **Groq LLM** | Predictions & sentiment + narrative |
+| Database | **Supabase (PostgreSQL)** with **SQLite fallback** | User data & persistence |
+| Cache | **Redis** (optional, in-memory fallback) | Speed |
+| Frontend | **HTML5 / CSS3 / Vanilla JS** + **Chart.js** | No build step, served by the backend |
 
-### Step 1: Clone Repository
-```bash
-git clone https://github.com/yourusername/quant-terminal.git
-cd quant-terminal
-```
-
-### Step 2: Create Virtual Environment
-```bash
-# Windows
-python -m venv venv
-venv\Scripts\activate
-
-# macOS/Linux
-python3 -m venv venv
-source venv/bin/activate
-```
-
-### Step 3: Install Dependencies
-```bash
-pip install -r requirements.txt
-```
-
-### Step 4: Set Up Environment Variables
-Create a `.env` file in the project root:
-
-```env
-# Supabase Configuration
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_KEY=your-service-role-key
-
-# External APIs
-NEWSDATA_API_KEY=your-newsdata-key
-GNEWS_API_KEY=your-gnews-key
-FINNHUB_API_KEY=your-finnhub-key
-GROQ_API_KEY=your-groq-key
-FIRECRAWL_API_KEY=your-firecrawl-key
-
-# Redis (optional)
-REDIS_URL=redis://localhost:6379/0
-
-# App Configuration
-DEBUG=false
-PORT=8001
-```
-
-### Step 5: Initialize Database
-1. Create a Supabase project at https://supabase.com
-2. Run the SQL migrations in `backend/sql/`
-3. Set up authentication providers (Email, Google, etc.)
-
-### Step 6: Run the Application
-```bash
-# Start the backend server
-cd backend
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
-
-# In another terminal, you can serve the frontend (optional)
-# The backend already serves static files, but for development:
-cd frontend
-python -m http.server 8080
-```
-
-### Step 7: Access the Application
-- **Web App**: http://localhost:8001
-- **API Docs**: http://localhost:8001/docs (Swagger UI)
-- **API Redoc**: http://localhost:8001/redoc
-
----
-
-## ⚙ Configuration
-
-### Required Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `SUPABASE_URL` | Your Supabase project URL | Yes |
-| `SUPABASE_ANON_KEY` | Supabase anonymous key | Yes |
-| `SUPABASE_SERVICE_KEY` | Supabase service role key | Yes |
-| `NEWSDATA_API_KEY` | NewsData.io API key | No* |
-| `GNEWS_API_KEY` | GNews API key | No* |
-| `FINNHUB_API_KEY` | Finnhub API key | No* |
-
-*At least one news API key is recommended for sentiment analysis
-
-### Optional Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `REDIS_URL` | `redis://localhost:6379/0` | Redis connection string |
-| `PORT` | `8001` | Server port |
-| `DEBUG` | `false` | Enable debug mode |
-| `GROQ_MODEL` | `openai/gpt-oss-120b` | Groq AI model name |
-| `GROQ_SENTIMENT_MODEL` | `groq/compound-mini` | Lightweight Groq model for per-article sentiment (avoids rate limits) |
-| `CACHE_TTL` | `300` | Default cache TTL in seconds |
-
----
-
-## 🚀 Usage
-
-### First-Time Setup
-1. Register a new account at `/auth.html`
-2. Complete the portfolio setup wizard at `/setup.html`
-3. Set your risk tolerance and preferred trading strategy
-4. Add initial cash balance and holdings
-
-### Daily Workflow
-1. **Check Market Overview** - Visit homepage for real-time indices and heatmap
-2. **Analyze Stocks** - Use `/analysis.html` for detailed technical analysis
-3. **Manage Portfolio** - Track P&L at `/portfolio.html`
-4. **Get AI Insights** - View personalized recommendations
-
-### Trading Modes
-- **Intraday** - 5-minute charts, fast signals, tight stops
-- **Swing** - Daily charts, medium-term holds, ATR-based stops
-- **Long-term** - Weekly charts, fundamental focus, wide stops
-
----
-
-## 📚 API Documentation
-
-### Authentication Endpoints
-```
-POST /auth/v1/token?grant_type=password    # Login
-POST /auth/v1/signup                       # Register
-POST /auth/v1/logout                       # Logout
-POST /auth/v1/refresh                      # Refresh token
-```
-
-### Analysis Endpoints
-```
-GET /api/analyze?symbol=RELIANCE.NS&mode=swing    # Analyze stock
-GET /api/sentiment/{symbol}                        # Get sentiment
-GET /api/fundamental/{symbol}                      # Fundamental analysis
-```
-
-### Portfolio Endpoints
-```
-GET  /api/portfolio/setup           # Get setup status
-POST /api/portfolio/setup           # Save portfolio setup
-POST /api/portfolio/buy             # Buy shares
-POST /api/portfolio/sell            # Sell shares
-GET  /api/portfolio/summary         # Get portfolio summary
-GET  /api/portfolio/recommendations # AI recommendations
-```
-
-### Market Data Endpoints
-```
-GET /api/landing-data               # Public market data
-GET /api/landing-data/personalized  # Personalized data (auth required)
-GET /api/sparklines                 # Sparkline charts
-GET /api/market/indices             # Market indices
-GET /api/market/top-gainers         # Top gainers/losers
-```
-
-### User Endpoints
-```
-GET  /api/user/preferences          # Get preferences
-POST /api/user/preferences          # Save preferences
-GET  /api/user/profile              # Get profile
-PUT  /api/user/profile              # Update profile
-```
-
-For complete API documentation, visit `/docs` when the server is running.
-
----
-
-## 📁 Project Structure
-
-```
-quant-terminal/
-├── backend/
-│   ├── app/
-│   │   ├── __init__.py
-│   │   ├── main.py                 # FastAPI application entry point
-│   │   ├── sentiment.py            # News sentiment analysis
-│   │   ├── indicators.py           # Technical indicators
-│   │   ├── ml_model.py             # Machine learning models
-│   │   ├── portfolio.py            # Portfolio management
-│   │   ├── supabase_portfolio.py   # User portfolio management
-│   │   ├── supabase_auth.py        # Authentication
-│   │   ├── cache.py                # Redis + in-memory caching
-│   │   ├── fundamental_analysis.py # Fundamental data
-│   │   ├── realtime.py             # WebSocket real-time data
-│   │   └── personalized_trading.py # Personalized recommendations
-│   ├── sql/
-│   │   └── 001_initial_schema.sql  # Database migrations
-│   └── requirements.txt
-│
-├── frontend/
-│   ├── index.html                  # Homepage / Dashboard
-│   ├── analysis.html               # Stock analysis terminal
-│   ├── portfolio.html              # Portfolio management
-│   ├── dashboard.html              # User dashboard
-│   ├── setup.html                  # Portfolio setup wizard
-│   ├── auth.html                   # Login/register
-│   ├── data-sources.html           # API documentation
-│   └── static/
-│       ├── css/
-│       │   ├── style.css           # Main stylesheet
-│       │   └── pro-theme.css       # Dark theme variables
-│       └── js/
-│           ├── app.js              # Main application logic
-│           ├── analysis.js         # Analysis page logic
-│           └── auth.js             # Authentication logic
-│
-├── data/
-│   └── portfolios/                 # Local portfolio storage
-│       └── {user_id}.json
-│
-├── .env.example                    # Environment template
-├── .gitignore
-├── LICENSE
-└── README.md                       # This file
-```
-
----
-
-## 🗄 Database Schema
-
-### Profiles Table
-```sql
-CREATE TABLE profiles (
-    id UUID PRIMARY KEY REFERENCES auth.users(id),
-    email TEXT NOT NULL,
-    full_name TEXT,
-    avatar_url TEXT,
-    risk_tolerance TEXT DEFAULT 'medium',
-    preferred_strategy TEXT DEFAULT 'swing',
-    capital DECIMAL(15,2) DEFAULT 0,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-```
-
-### Watchlists Table
-```sql
-CREATE TABLE watchlists (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES profiles(id),
-    symbol TEXT NOT NULL,
-    notes TEXT,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-```
-
-### Alerts Table
-```sql
-CREATE TABLE alerts (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES profiles(id),
-    symbol TEXT NOT NULL,
-    alert_type TEXT NOT NULL,  -- price, rsi, sentiment
-    condition TEXT NOT NULL, -- above, below
-    threshold DECIMAL(10,2),
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-```
+A key design principle: **every external service has a fallback.** If Groq, a news API, or the transformer model is unavailable, the app still works — it just uses a simpler method. It's built so that **nothing crashes the app.**
 
 ---
 
 ## 📸 Screenshots
 
-### Homepage Dashboard
-![Homepage](screenshots/homepage.png)
-*Real-time market indices, sector heatmap, and sparkline charts*
+> *Add your screenshots to a `screenshots/` folder and reference them here.*
 
-### Stock Analysis Terminal
-![Analysis](screenshots/analysis.png)
-*Technical indicators, sentiment analysis, and AI predictions*
+| Home Dashboard | Stock Analysis | Multi-Agent Insights |
+|----------------|----------------|----------------------|
+| ![Home](screenshots/homepage.png) | ![Analysis](screenshots/analysis.png) | ![Agents](screenshots/agents.png) |
 
-### Portfolio Management
-![Portfolio](screenshots/portfolio.png)
-*Track positions, P&L, and sector allocation*
-
-### Portfolio Setup
-![Setup](screenshots/setup.png)
-*Onboarding wizard for new users*
+| Portfolio | Audit Trail | Auth |
+|-----------|-------------|------|
+| ![Portfolio](screenshots/portfolio.png) | ![Audit](screenshots/audit.png) | ![Auth](screenshots/auth.png) |
 
 ---
 
-## 🤝 Contributing
+## 🚀 Quick Start
 
-We welcome contributions! Please follow these steps:
+You only need **Python 3.8+** and a few minutes. (The frontend is served by the backend, so there's **one server to run**.)
 
-1. **Fork the Repository**
-2. **Create a Feature Branch**
-   ```bash
-   git checkout -b feature/amazing-feature
-   ```
-3. **Make Your Changes**
-4. **Run Tests**
-   ```bash
-   pytest backend/tests/
-   ```
-5. **Commit Changes**
-   ```bash
-   git commit -m 'Add amazing feature'
-   ```
-6. **Push to Branch**
-   ```bash
-   git push origin feature/amazing-feature
-   ```
-7. **Open a Pull Request**
+### 1. Get the code
+```bash
+git clone https://github.com/AgriEssentials/finance.git
+cd finance
+```
 
-### Contribution Guidelines
-- Follow PEP 8 style guide for Python code
-- Use ESLint for JavaScript
-- Add tests for new features
-- Update documentation
-- Ensure backwards compatibility
+### 2. Create a virtual environment (optional but recommended)
+```bash
+# Windows
+python -m venv venv
+venv\Scripts\activate
+
+# macOS / Linux
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### 3. Install dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Add your keys
+Copy the included `.env` (it's already git-ignored) and fill in the values you want:
+
+```env
+# REQUIRED for login to work:
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+
+# Optional but recommended (more features):
+GROQ_API_KEY=your-groq-key
+NEWSDATA_API_KEY=your-newsdata-key
+GNEWS_API_KEY=your-gnews-key
+FINNHUB_API_KEY=your-finnhub-key
+FIRECRAWL_API_KEY=your-firecrawl-key
+```
+
+> 🔐 **Never commit your `.env` file.** It's already in `.gitignore`.
+
+### 5. Run it (that's it!)
+```bash
+cd backend
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8001
+```
+
+### 6. Open the app
+- **🖥 Web app:** <http://localhost:8001>
+- **📘 API docs (Swagger):** <http://localhost:8001/api/docs>
+- **📗 ReDoc:** <http://localhost:8001/api/redoc>
+- **🤖 Multi-agent demo:** <http://localhost:8001/agent-insights.html>
+
+---
+
+## 📄 Pages
+
+| URL | What it is |
+|-----|-----------|
+| `/` | **Home dashboard** — live market pulse, sector heatmap, news |
+| `/analysis.html` | **Analysis terminal** — analyze any stock |
+| `/agent-insights.html` | **Multi-agent AI research desk** (PS-01) |
+| `/dashboard.html` | **Your dashboard** — portfolio, P&L, watchlist |
+| `/portfolio.html` | **Portfolio manager** — buy/sell, positions |
+| `/setup.html` | **Onboarding** — set risk tolerance, capital, strategy |
+| `/auth.html` | **Login / Register** |
+| `/audit-trail.html` | **Veritas** — audit trail of AI signals |
+| `/data-sources.html` | **Data sources & telemetry** |
+| `/test.html` | **API smoke test** (dev) |
+
+---
+
+## 📚 API Reference
+
+The full interactive reference is at `/api/docs`. Here are the highlights:
+
+**Core analysis**
+```
+GET /api/analyze?symbol=RELIANCE.NS&mode=swing
+GET /api/professional/analyze?symbol=RELIANCE.NS&mode=swing
+```
+
+**Multi-Agent system (PS-01)**
+```
+GET  /api/v2/agents/analyze?symbol=INFY.NS&mode=swing
+GET  /api/v2/agents/roles                 # list agents + output contracts
+GET  /api/v2/agents/rag/search?query=...  # semantic search over the corpus
+GET  /api/v2/agents/rag/corpus            # corpus stats + documents
+POST /api/v2/agents/rag/ingest            # re-seed the corpus
+GET  /api/v2/agents/performance           # session performance log
+POST /api/v2/agents/performance/evaluate  # score vs 30-day forward return
+```
+
+**Market data**
+```
+GET /api/landing-data          # public market dashboard data
+GET /api/sparklines            # miniature charts
+GET /api/market-news           # news feed
+GET /api/scanner/top-gainers   # top gainers / losers / most active
+```
+
+**Portfolio & user**
+```
+GET  /api/portfolio/summary
+POST /api/portfolio/buy
+POST /api/portfolio/sell
+POST /api/portfolio/setup
+GET  /api/user/profile/{id}
+POST /api/user/trades/log      # trade journal
+GET  /api/user/coach/{id}      # AI coaching
+```
+
+---
+
+## 🗂 Project Structure
+
+```
+finance/
+├── backend/
+│   └── app/
+│       ├── main.py                  # FastAPI entry point (all routes + static serving)
+│       ├── agents/                  # PS-01 multi-agent system
+│       │   ├── orchestrator.py      # parallel dispatch + synthesis
+│       │   ├── agents.py            # the 7 specialized agents
+│       │   ├── rag.py               # document corpus + semantic search
+│       │   ├── performance.py       # session performance log
+│       │   └── contracts.py         # structured output contracts
+│       ├── indicators.py            # technical indicators
+│       ├── sentiment.py             # news sentiment (multi-source)
+│       ├── ml_model.py              # ML price-direction model
+│       ├── ai_predictor.py          # LLM "brain" with fallbacks
+│       ├── fundamental_analysis.py  # fundamentals
+│       ├── risk_manager.py          # risk & position sizing
+│       ├── personalized_trading.py  # per-user personalization
+│       ├── veritas_audit.py         # evidence/audit trail
+│       └── database.py              # SQLAlchemy models (SQLite/PG)
+├── frontend/
+│   ├── index.html                   # home dashboard
+│   ├── agent-insights.html          # multi-agent demo UI
+│   ├── analysis.html                # stock analysis terminal
+│   └── static/                      # css / js / sounds
+├── data/                            # local portfolios (per user)
+├── .env                             # your secrets (git-ignored)
+├── requirements.txt
+└── README.md
+```
+
+---
+
+## ⚙️ Configuration (`.env`)
+
+| Variable | Required | Purpose |
+|----------|:--------:|---------|
+| `SUPABASE_URL` | ✅ | Your Supabase project URL |
+| `SUPABASE_ANON_KEY` | ✅ | Public anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | ⬜ | Server-side key (admin ops) |
+| `GROQ_API_KEY` | ⬜ | AI narrative / sentiment |
+| `NEWSDATA_API_KEY` | ⬜ | News source |
+| `GNEWS_API_KEY` | ⬜ | News source |
+| `FINNHUB_API_KEY` | ⬜ | Analysts & fundamentals |
+| `FIRECRAWL_API_KEY` | ⬜ | Stock-specific news search |
+| `REDIS_URL` | ⬜ | Cache (falls back to in-memory) |
+| `PORT` | ⬜ | Server port (default `8001`) |
+
+**What happens if keys are missing?** The app still runs. Fewer news sources, no AI narrative, and a simpler sentiment method — but nothing crashes. That's intentional.
+
+---
+
+## 🧭 Troubleshooting / FAQ
+
+**The page loads but shows "Login for Full Access"**
+That's the guest view — you're not logged in. Register at `/auth.html`. Some features (portfolio, shadow market, personalized dashboard) require an account.
+
+**I see `401 Unauthorized` in the console**
+Your login token expired or is stale. Either log in again, or clear it and reload. The app now gracefully falls back to public data instead of breaking.
+
+**The app works without Supabase?**
+Yes. Authentication features are limited, but market data and analysis work on the **local SQLite** fallback.
+
+**It's slow on the first search**
+The first analysis warms up AI models and fetches news. Subsequent searches are much faster (cached for 10 minutes). The backend pre-warms models at startup.
+
+**Port already in use / connection refused**
+`8001` is the default. Change `PORT` in `.env` or run with `--port 8002`. Check nothing else is using it.
+
+**Missing `alert.mp3` or other static 404s**
+Run-time asset paths. The app now ignores missing sounds silently — these are cosmetic only.
+
+**I want to reset my data**
+The local database is `stock_analyzer.db` (git-ignored). Delete it and re-run to start fresh. User portfolios live under `data/portfolios/`.
 
 ---
 
 ## 🔒 Security
 
-- All API endpoints use JWT authentication
-- Row Level Security (RLS) enabled in Supabase
-- Rate limiting on sensitive endpoints
-- Input validation and sanitization
-- CORS protection configured
-- No sensitive data in localStorage (except auth token)
+- All sensitive auth endpoints use **JWT** via Supabase.
+- `.env` (secrets) is **git-ignored** and never committed.
+- `<audio>/<script>` and user content are escaped on the frontend.
+- CORS is configured; rate limiting protects sensitive endpoints.
+- **Please:** never share or commit your `.env`, API keys, or a real Supabase service key.
 
-### Reporting Security Issues
-Please report security vulnerabilities to security@quantterminal.com
+---
+
+## 🧪 Running Tests
+
+```bash
+cd backend
+pytest
+```
+
+> The repo also ships helper scripts (`check_server.py`, `diagnostic.py`, `fix_supabase.py`) to diagnose Supabase/connection issues.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome!
+
+1. **Fork** the repo, create a feature branch.
+2. Follow existing code style (PEP 8 for Python, ESLint-style for JS).
+3. Add tests where possible.
+4. **Run** `pytest` and the typecheck (`cd frontend && npm run typecheck`).
+5. Open a **Pull Request**.
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for details.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Released under the **MIT License** — see [`LICENSE`](LICENSE).
 
 ---
 
 ## 🙏 Acknowledgments
 
-- **Yahoo Finance** for market data
-- **Supabase** for backend infrastructure
-- **FastAPI** team for the amazing framework
-- **Hugging Face** for transformer models
-- **Chart.js** for visualization
+- **Yahoo Finance** (market data) · **Supabase** (auth/db) · **FastAPI** · **Groq** (LLM) · **Hugging Face** (transformers) · **Chart.js**
+- Built as a **PS-01 Multi-Agent Autonomous Financial Intelligence System** for the retail-investor thesis: *from raw data to explainable, personalized, cited decision intelligence.*
+- The `data/portfolios/*.json` files are per-user demo data.
 
 ---
 
-## 📞 Support
+## 🔗 Related Docs
 
-- **Email**: support@quantterminal.com
-- **Discord**: [Join our community](https://discord.gg/quantterminal)
-- **Issues**: [GitHub Issues](https://github.com/yourusername/quant-terminal/issues)
-
----
-
-## 🗺 Roadmap
-
-### Q1 2025
-- [ ] Mobile app (React Native)
-- [ ] Options chain analysis
-- [ ] Backtesting engine
-- [ ] Paper trading
-
-### Q2 2025
-- [ ] Multi-asset support (Crypto, Forex)
-- [ ] Social trading features
-- [ ] Advanced charting (TradingView integration)
-- [ ] Alert system overhaul
-
-### Q3 2025
-- [ ] AI-powered trade journal analysis
-- [ ] Strategy builder
-- [ ] Community features
-- [ ] Premium subscription tier
+- [`AGENT_ARCHITECTURE.md`](AGENT_ARCHITECTURE.md) — the multi-agent design (PS-01)
+- [`QUICK_START_FOR_ENGINEERS.md`](QUICK_START_FOR_ENGINEERS.md) — short engineering intro
+- [`AI_ML_MODELS_DOCUMENTATION.md`](AI_ML_MODELS_DOCUMENTATION.md) — the ML models
+- [`CHANGELOG.md`](CHANGELOG.md) — version history
 
 ---
 
-<p align="center">
-  Made with ❤️ by the Quant Terminal Team
-</p>
+<div align="center">
 
-<p align="center">
-  <a href="https://twitter.com/quantterminal">Twitter</a> •
-  <a href="https://linkedin.com/company/quantterminal">LinkedIn</a> •
-  <a href="https://youtube.com/quantterminal">YouTube</a>
-</p>
+Made with ❤️ for retail investors.
+
+**⚠ Disclaimer:** This software is for educational purposes only and does not constitute investment advice. Stock markets carry significant risk. Always consult a SEBI-registered financial advisor before investing.
+
+</div>
